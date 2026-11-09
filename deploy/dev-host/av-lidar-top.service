@@ -1,0 +1,76 @@
+# lidar_top 유닛 — 개발 호스트(Ubuntu 26.04) 전용.
+#
+# 네이티브판은 deploy/av-lidar-top.service 다. 이 호스트에는 ROS 2 jazzy
+# 바이너리가 없어서 드라이버를 컨테이너에서 띄운다. unit 이름은 네이티브판과
+# 같아야 한다 — services.yaml 이 av-lidar-top.service 를 가리키기 때문이다.
+#
+# 설치:
+#   sudo cp deploy/dev-host/av-lidar-top.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now av-lidar-top
+#
+# --rm 을 쓰지 않는다. 비정상 종료 뒤에도 로그를 볼 수 있어야 하고, 재시작은
+# ExecStartPre 의 rm -f 가 보장한다.
+
+[Unit]
+Description=Ouster OS-2-128 driver (lidar_top, ROS 2 jazzy in docker)
+After=network-online.target snap.docker.dockerd.service
+Wants=network-online.target
+# 이 호스트는 snap docker 가 /var/run/docker.sock 을 잡고 있다 (docker-ce 도
+# 떠 있지만 소켓이 가려져 있다). docker-ce 로 정리하면 After= 를
+# docker.service 로 고쳐라.
+# 센서를 기다리는 것이 이 유닛의 일이다. 몇 시간 꺼져 있는 센서도 기다려야 하므로
+# 기동 비율 제한(기본 10초에 5회)을 두지 않는다. StartLimitIntervalSec 는 [Unit]
+# 섹션 키다 — [Service] 에 쓰면 조용히 무시된다.
+StartLimitIntervalSec=0
+
+[Service]
+# 설정 루트는 리포가 아니라 ~/av_config 다. 리포의 config/ 는 **배포될 원본**이고
+# 실행 중인 시스템은 자기 사본에서 이력을 쌓는다(README §3). 둘을 같은 디렉터리로
+# 두면 config/params 가 리포 안의 중첩 git 저장소가 되고, 상위 리포가 그것을 깨진
+# 하위 모듈 포인터로 취급해 parameter file 이 커밋에서 빠진다.
+Type=simple
+# 정지·정리 방식은 이 호스트의 두 가지 제약에서 나왔다.
+#
+# (1) snap docker 가 **실행 중** 컨테이너를 죽이는 요청을 거부한다
+#     (docker stop|kill|rm -f -> "permission denied"). sudo 없이는 안 된다.
+# (2) `ros2 launch` 가 컨테이너의 PID 1 이 되면 신호를 못 받는다. 커널이 PID 1 을
+#     보호하고, 핸들러가 없는 신호는 무시된다. SIGTERM 은 먹지 않고 SIGINT 만
+#     듣는다(2026-11-09 실측). 자식이 죽어도 스스로 내려가지 않아 컨테이너가
+#     그대로 남고, 다음 기동이 이름 충돌(exit 125)로 실패한다 -> Restart 루프.
+#
+# 그래서:
+#   --init  : tini 를 PID 1 로 둬서 신호 전달과 자식 수거를 정상화한다
+#   --rm    : 프로세스가 끝나면 컨테이너가 스스로 사라진다
+#   ExecStop / ExecStartPre 에서 docker exec 로 SIGINT 를 보낸다 (exec 는 허용된다)
+#   ExecStartPre 에 정리를 한 번 더 둔다. ExecStop 이 실패해도 다음 기동이 막히지
+#   않아야 한다.
+ExecStartPre=-/usr/bin/docker exec av-lidar-top kill -INT 1
+ExecStartPre=-/bin/sh -c 'for i in $(seq 20); do docker ps -a --format "{{.Names}}" | grep -qx av-lidar-top || exit 0; docker rm av-lidar-top >/dev/null 2>&1 && exit 0; sleep 1; done'
+ExecStart=/usr/bin/docker run --rm --init --name av-lidar-top \
+    --net=host --ipc=host \
+    -e ROS_DOMAIN_ID=0 \
+    -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+    -v /home/vialab/ros2_ws:/root/ros2_ws \
+    -v /home/vialab/av_config:/opt/av_config \
+    ros2-jazzy-ouster:0.13.15 \
+    bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/ouster_ws/install/setup.bash && source /root/ros2_ws/install/setup.bash && exec ros2 launch av_bringup lidar_top.launch.py config_root:=/opt/av_config'
+# SIGKILL 로 끝내면 Fast DDS 의 공유메모리 세그먼트와 포트 뮤텍스가 /dev/shm 에
+# 남고, 그게 쌓이면 DDS discovery 자체가 깨진다(2026-11-09 실측: 드라이버는
+# 정상인데 ros2 node list 가 빈 목록). SIGINT 로 정상 종료시켜 participant 를
+# 정리하게 한다. 이 호스트는 그래서 UDP 전송만 쓴다(FASTDDS_BUILTIN_TRANSPORTS).
+ExecStop=-/usr/bin/docker exec av-lidar-top kill -INT 1
+
+# on-failure 가 아니라 always 다. configure 실패 시 launch 는 **정상 종료**한다
+# (av_bringup/launch/lidar_top.launch.py 의 Shutdown 이벤트, exit 0). on-failure
+# 는 exit 0 을 실패로 보지 않으므로 재시작이 걸리지 않고, 센서가 잠깐 끊겼다가
+# 돌아와도 유닛이 inactive(dead) 로 남는다 — 2026-11-09 13:28 에 실제로 그렇게
+# 됐다 ("Couldn't get active config for: 10.5.5.87" 뒤 그대로 멈춤).
+Restart=always
+RestartSec=5
+
+TimeoutStartSec=90
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

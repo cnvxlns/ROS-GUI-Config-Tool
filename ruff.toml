@@ -1,0 +1,36 @@
+# 백엔드 린트 설정.
+#
+# 의도적으로 좁게 고른다. 스타일 취향보다 버그에 가까운 것만 본다.
+# 테스트는 sys.path 를 먼저 건드린 뒤 import 하므로 E402 가 필요하고,
+# 각 파일에 # noqa: E402 를 달아 둔다.
+
+target-version = "py312"
+line-length = 100
+extend-exclude = [".venv-dev", "build", "install", "log"]
+
+[lint]
+select = [
+    "F",    # pyflakes — 미사용 import, 미정의 이름
+    "E",    # pycodestyle 오류
+    "W",    # pycodestyle 경고
+    "I",    # import 정렬
+    "UP",   # 구식 문법
+    "B",    # bugbear — 흔한 함정
+    "SIM",  # 단순화
+    "RUF",  # ruff 고유 규칙
+    "C4",   # comprehension
+]
+ignore = [
+    "E501",    # 줄 길이는 formatter 가 아니라 사람이 판단한다
+    "B008",    # FastAPI 의 Header()/Depends() 기본값 패턴
+    "RUF001",  # 한글 주석의 전각 문자
+    "RUF002",
+    "RUF003",
+    # str+Enum 은 Pydantic 직렬화에서 검증된 조합이다. StrEnum 으로 바꾸면
+    # 동작이 미묘하게 달라질 수 있어 8개 열거형을 한꺼번에 건드리지 않는다.
+    "UP042",
+]
+
+[lint.per-file-ignores]
+# 테스트는 픽스처 재할당과 사설 속성 접근이 흔하다
+"src/av_config/test/*" = ["SLF001", "B011"]

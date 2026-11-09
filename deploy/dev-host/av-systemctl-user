@@ -1,0 +1,25 @@
+#!/bin/sh
+# AV_CONFIG_SYSTEMCTL_PREFIX 용 shim — 개발 호스트 전용.
+#
+# applier 는 항상 이렇게 실행한다:
+#   <PREFIX...> systemctl restart <unit>...
+# PREFIX 는 systemctl **앞에** 붙으므로 --user 를 끼워 넣을 자리가 없다. 그래서
+# 이 스크립트가 리터럴 "systemctl" 인수를 떼고 --user 를 붙여 다시 부른다.
+#
+# 왜 user 유닛인가: 시스템 유닛 설치와 재시작에는 sudo 또는 polkit 규칙이
+# 필요하다. 개발 호스트에서는 그 권한 없이 끝까지 돌려보는 것이 목적이므로
+# `systemctl --user` 를 쓴다. 배포 환경은 시스템 유닛 + polkit 이고(명세 §10.3)
+# 그때는 이 shim 없이 PREFIX 를 비워 둔다.
+#
+# 컨테이너 안에서 호스트의 user systemd 에 닿으려면 다음이 필요하다:
+#   -u 1000:1000                                 (user bus 는 소유자만 인증된다)
+#   -v /run/user/1000/bus:/run/user/1000/bus
+#   -e XDG_RUNTIME_DIR=/run/user/1000
+#   -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+set -eu
+
+if [ "${1:-}" = "systemctl" ]; then
+    shift
+fi
+
+exec systemctl --user "$@"

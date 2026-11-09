@@ -1,0 +1,6 @@
+# perception 서브시스템 parameter file
+
+/perception/lidar_segmentation:
+  ros__parameters:
+    ground_threshold_m: 0.15
+    min_cluster_points: 20

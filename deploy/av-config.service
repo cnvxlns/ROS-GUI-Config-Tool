@@ -1,0 +1,29 @@
+# Config App systemd 유닛 (명세 §11.3)
+#
+# 주의: Config App 은 services.yaml 에 등록된 어떤 unit 에도 포함되지 않아야 한다.
+# 자기 자신을 재시작하면 적용 트랜잭션이 중단되고 결과를 보고할 수 없다.
+
+[Unit]
+Description=AV Web Configure App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=avconfig
+WorkingDirectory=/opt/av_config
+Environment=AV_CONFIG_ROOT=/opt/av_config
+# 다른 노드와 같은 DDS 도메인을 써야 노드를 볼 수 있다(§11.3)
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/opt/av_config/.venv/bin/python -m av_config.main
+
+Nice=10
+# TBD(§13.2): AI/제어에 할당하지 않은 코어로 지정
+CPUAffinity=0 1
+CPUQuota=20%
+MemoryMax=300M
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

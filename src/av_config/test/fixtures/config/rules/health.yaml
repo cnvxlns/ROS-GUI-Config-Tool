@@ -1,0 +1,23 @@
+# 점검 규칙 설정 (명세 §9.2)
+# 임계값은 센서 확정 후 정한다.
+
+rules:
+  R1:
+    enabled: true
+    description: "센서 데이터 미수신"
+    zero_hz_for_sec: 3.0
+  R2:
+    enabled: true
+    description: "udp_dest 와 호스트 NIC IP 불일치"
+  R3:
+    enabled: true
+    description: "드라이버 경고/오류 (/diagnostics)"
+  R4:
+    enabled: true
+    description: "저장값과 런타임값 불일치 (drift)"
+  # R5~R9 는 M5 에서 구현한다(§13.1)
+  R5: { enabled: false, description: "발행 주기 저하", hz_tolerance_ratio: 0.2 }
+  R6: { enabled: false, description: "frame 누락" }
+  R7: { enabled: false, description: "QoS 불일치" }
+  R8: { enabled: false, description: "센서 간 시간 불일치" }
+  R9: { enabled: false, description: "기준 프로파일과 다름" }

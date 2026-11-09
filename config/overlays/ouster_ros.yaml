@@ -1,0 +1,91 @@
+# ouster_ros 스키마 생성 오버레이.
+#
+# tools/import_driver_params.py 가 드라이버의 parameter file 에서 이름·타입·설명·
+# 허용 값을 뽑아내고, ROS 가 알려줄 수 없는 정보를 이 파일이 채운다.
+# 드라이버가 업데이트되면 아래 명령으로 다시 만든다.
+#
+#   python tools/import_driver_params.py \
+#       <ouster-ros>/ouster-ros/config/driver_params.yaml \
+#       --driver ouster_ros \
+#       --overlay config/overlays/ouster_ros.yaml \
+#       --out config/schemas/ouster_ros.yaml
+#
+# 근거는 ouster-ros 소스에서 확인했다 (태그 jazzy-0.13.15).
+# 버전을 고정한 이유는 docs/driver-version-pin.md 에 있다.
+
+driver: ouster_ros
+node: /ouster/os_driver
+required_services:
+  - /ouster/get_metadata
+  - /ouster/get_config
+
+defaults:
+  apply: restart
+  # os_sensor_node.cpp / os_driver_node.cpp 에 add_on_set_parameters_callback 이
+  # 없다. 실행 중 파라미터 변경을 지원하지 않으므로 전부 재시작이다.
+  apply_note: "드라이버에 add_on_set_parameters_callback 이 없다"
+  tier: engineer
+  layer: driver
+
+# 센서 펌웨어에 기록되는 파라미터. Ouster SDK 의 sensor config 항목과 대응한다.
+#
+# jazzy-0.13.15 가 ROS 파라미터로 노출하고, **장치가 되읽을 수 있는** 것만 적는다.
+#
+# udp_profile_lidar 는 제외했다. FW 2.1.2 의 get_config 응답에 그 키가 없어서
+# readback_via 의 json_path 가 가리킬 대상이 없다(2026-11-09 서비스 호출로 확인).
+# 프로파일이 없는 펌웨어이므로 driver 계층으로 둔다 — 드라이버가 "요청하는" 값일
+# 뿐 장치에 기록되지 않는다. FW 2.2 이상으로 올리면 device 로 되돌린다.
+#
+# 원래 문장: jazzy-0.13.15 가 ROS 파라미터로 노출하는 것만 적는다. 센서에는 더 많은 설정이
+# 있지만(operating_mode, signal_multiplier, sync_pulse_*, nmea_* 등 19개) 이
+# 드라이버가 파라미터로 선언하지 않아 Config App 이 다룰 수 없다. 센서의 HTTP API
+# 로는 설정 가능하다. 목록과 경위는 docs/driver-version-pin.md 를 보라.
+device_params:
+  - udp_dest
+  - lidar_port
+  - imu_port
+  - lidar_mode
+  - timestamp_mode
+  - azimuth_window_start
+  - azimuth_window_end
+
+# device 계층은 장치에서 되읽어야 한다 (명세 §4.4).
+readback:
+  service: /ouster/get_config
+  json_path: "$.{name}"
+  overrides:
+    # 센서는 azimuth_window 를 [start, end] 배열 하나로 보고한다.
+    # json_path 는 점 표기만 지원하므로 배열에서 한 원소를 꺼낼 수 없다.
+    azimuth_window_start: "$.azimuth_window"
+    azimuth_window_end: "$.azimuth_window"
+
+notes:
+  azimuth_window_start: "TODO: 배열 인덱스를 지원하거나 start/end 를 묶어 다뤄야 한다"
+  azimuth_window_end: "TODO: 배열 인덱스를 지원하거나 start/end 를 묶어 다뤄야 한다"
+
+global_ref:
+  sensor_frame: frames.lidar_top
+
+header: |
+  # ouster-ros 파라미터 스키마
+  #
+  # 자동 생성 파일이다. 직접 고치지 말고 오버레이를 고친 뒤 다시 생성하라.
+  #   tools/import_driver_params.py + config/overlays/ouster_ros.yaml
+  #
+  # 출처: https://github.com/ouster-lidar/ouster-ros (태그 jazzy-0.13.15)
+  #       config/driver_params.yaml 의 주석에서 설명과 허용 값을 가져왔다.
+  #
+  # 소스에서 확인한 사실:
+  #   - declare_parameter 74회, ParameterDescriptor 0회
+  #     -> 실행 중 수집으로는 설명·범위·read_only 를 얻을 수 없다. 이 파일이 그 자리다.
+  #   - add_on_set_parameters_callback 0회
+  #     -> 실행 중 파라미터 변경을 지원하지 않는다. 모든 apply 가 restart 다.
+  #   - set_config 서비스는 string config_file(파일 경로)을 받아 센서를 reinit 한다
+  #     (ouster-sensor-msgs/srv/SetConfig.srv 에서 확인)
+  #     -> 값 하나만 넘기는 방식이 아니어서 현재 apply_via 모델로는 쓸 수 없다.
+  #   - get_config / get_metadata 로 장치의 실제 설정을 되읽을 수 있다
+  #
+  # 확인이 남은 것:
+  #   - readback_via 의 json_path 가 get_config 응답의 실제 키와 맞는지
+  #     ros2 service call /ouster/get_config ouster_sensor_msgs/srv/GetConfig
+  #   - 어떤 파라미터를 operator 등급으로 열지

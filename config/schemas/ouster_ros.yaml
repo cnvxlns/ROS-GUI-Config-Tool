@@ -1,0 +1,358 @@
+# ouster-ros 파라미터 스키마
+#
+# 자동 생성 파일이다. 직접 고치지 말고 오버레이를 고친 뒤 다시 생성하라.
+#   tools/import_driver_params.py + config/overlays/ouster_ros.yaml
+#
+# 출처: https://github.com/ouster-lidar/ouster-ros (태그 jazzy-0.13.15)
+#       config/driver_params.yaml 의 주석에서 설명과 허용 값을 가져왔다.
+#
+# 소스에서 확인한 사실:
+#   - declare_parameter 74회, ParameterDescriptor 0회
+#     -> 실행 중 수집으로는 설명·범위·read_only 를 얻을 수 없다. 이 파일이 그 자리다.
+#   - add_on_set_parameters_callback 0회
+#     -> 실행 중 파라미터 변경을 지원하지 않는다. 모든 apply 가 restart 다.
+#   - set_config 서비스는 string config_file(파일 경로)을 받아 센서를 reinit 한다
+#     (ouster-sensor-msgs/srv/SetConfig.srv 에서 확인)
+#     -> 값 하나만 넘기는 방식이 아니어서 현재 apply_via 모델로는 쓸 수 없다.
+#   - get_config / get_metadata 로 장치의 실제 설정을 되읽을 수 있다
+#
+# 확인이 남은 것:
+#   - readback_via 의 json_path 가 get_config 응답의 실제 키와 맞는지
+#     ros2 service call /ouster/get_config ouster_sensor_msgs/srv/GetConfig
+#   - 어떤 파라미터를 operator 등급으로 열지
+
+driver: ouster_ros
+match:
+  node_name_regex: "^/ouster/os_driver$"
+  required_services:
+    - "/ouster/get_config"
+    - "/ouster/get_metadata"
+
+params:
+  attempt_reconnect:
+    # 타입 bool, 현재값 False
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  azimuth_window_end:
+    # 타입 int, 현재값 360000
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "values range [0, 360000] millidegrees"
+    layer: device
+    # TODO: 배열 인덱스를 지원하거나 start/end 를 묶어 다뤄야 한다
+    readback_via: { service: "/ouster/get_config", json_path: "$.azimuth_window" }
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  azimuth_window_start:
+    # 타입 int, 현재값 0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "values range [0, 360000] millidegrees"
+    layer: device
+    # TODO: 배열 인덱스를 지원하거나 start/end 를 묶어 다뤄야 한다
+    readback_via: { service: "/ouster/get_config", json_path: "$.azimuth_window" }
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  destagger:
+    # 타입 bool, 현재값 True
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "enable or disable point cloud destaggering, default enabled"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  dormant_period_between_reconnects:
+    # 타입 double, 현재값 1.0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "wait time in seconds between reconnection attempts"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  imu_frame:
+    # 타입 string, 현재값 'os_imu'
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "name to use when referring to the imu frame"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    # global_ref: frames.TODO   # 전역 frame 규칙을 따른다면
+    lock_while_driving: true
+
+  imu_port:
+    # 타입 int, 현재값 0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "port value should be in the range [0, 65535]. If you use 0 as the port value then the first avaliable port number will be assigned"
+    layer: device
+    readback_via: { service: "/ouster/get_config", json_path: "$.imu_port" }
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  lidar_frame:
+    # 타입 string, 현재값 'os_lidar'
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "name to use when referring to the lidar frame"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    # global_ref: frames.TODO   # 전역 frame 규칙을 따른다면
+    lock_while_driving: true
+
+  lidar_mode:
+    # 타입 string, 현재값 ''
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "resolution and rate. Leave empty to remain on current the lidar mode"
+    layer: device
+    readback_via: { service: "/ouster/get_config", json_path: "$.lidar_mode" }
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # 허용 값 출처: 드라이버의 parameter file 주석
+    enum: ["512x10", "512x20", "1024x10", "1024x20", "2048x10", "4096x5"]
+    lock_while_driving: true
+
+  lidar_port:
+    # 타입 int, 현재값 0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "port value should be in the range [0, 65535]. If you use 0 as the port value then the first avaliable port number will be assigned"
+    layer: device
+    readback_via: { service: "/ouster/get_config", json_path: "$.lidar_port" }
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  mask_path:
+    # 타입 string, 현재값 ''
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "path to an image file that will be used to mask parts of the pointcloud"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    lock_while_driving: true
+
+  max_failed_reconnect_attempts:
+    # 타입 int, 현재값 2147483647
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "maximum number of attempts trying to communicate with the sensor. Counter resets upon successful connection"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  max_range:
+    # 타입 double, 현재값 1000.0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "maximum lidar range to consider (meters)"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  metadata:
+    # 타입 string, 현재값 ''
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "path to save metadata file to, if left empty a file with the sensor hostname or ip will be crearted in ~/.ros folder"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    lock_while_driving: true
+
+  min_range:
+    # 타입 double, 현재값 0.0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "minimum lidar range to consider (meters)"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  min_scan_valid_columns_ratio:
+    # 타입 double, 현재값 0.0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "The minimum ratio of valid columns for processing the LidarScan [0, 1]. default is 0%"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  mtp_dest:
+    # 타입 string, 현재값 ''
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "hostname IP address for receiving data packets via multicast, by default it is INADDR_ANY, so packets will be received on first available network interface"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    lock_while_driving: true
+
+  mtp_main:
+    # 타입 bool, 현재값 False
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "if true, then configure and reinit the sensor, otherwise start client with active configuration of sensor"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  organized:
+    # 타입 bool, 현재값 True
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "whether to generate an organized point cloud. default is organized"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  persist_config:
+    # 타입 bool, 현재값 False
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "request the sensor to persist settings"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  point_cloud_frame:
+    # 타입 string, 현재값 'os_lidar'
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "which frame of reference to use when generating PointCloud2 or LaserScan messages, select between the values of lidar_frame and sensor_frame"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    # global_ref: frames.TODO   # 전역 frame 규칙을 따른다면
+    lock_while_driving: true
+
+  point_type:
+    # 타입 string, 현재값 'original'
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "Here is a breif description of each option: - original: This uses the original point representation ouster_ros::Point of the ouster-ros driver. - native: directly maps all fields as published by the sensor to an equivalent point cloud representation with the additon of ring and timestamp fields. - xyz: the simplest point type, only has {x, y, z} - xyzi: same as xyz point type but adds intensity (signal) field. this type is not compatible with the low data profile. - o_xyzi: same as xyzi point type but doesn't add the extra 4 padding bytes. - xyzir: same as xyzi type but adds ring (channel) field. this type is same as Velodyne point cloud type this type is not compatible with the low data profile. for more details about the fields of each point type and their data refer to the following header files: - ouster_ros/os_point.h - ouster_ros/sensor_point_types.h - ouster_ros/common_point_types.h"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # 허용 값 출처: 드라이버의 parameter file 주석
+    enum: ["original", "native", "xyz", "xyzi", "o_xyzi", "yzir"]
+    lock_while_driving: true
+
+  proc_mask:
+    # 타입 string, 현재값 'IMU|PCL|SCAN|IMG|RAW|TLM'
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "use any combination of the 6 flags IMG, PCL, IMU, SCAN RAW and TLM to enable or disable their respective messages"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    lock_while_driving: true
+
+  ptp_utc_tai_offset:
+    # 타입 double, 현재값 -37.0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "UTC/TAI offset in seconds to apply when TIME_FROM_PTP_1588 timestamp mode is used"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  pub_static_tf:
+    # 타입 bool, 현재값 True
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "when this flag is set to True, the driver will broadcast the TF transforms for the imu/sensor/lidar frames. Prevent the driver from broadcasting TF transforms by setting this parameter to False"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  scan_ring:
+    # 타입 int, 현재값 0
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "use this parameter in conjunction with the SCAN flag to select which beam of the LidarScan to use when producing the LaserScan message. Choose a value the range [0, sensor_beams_count)"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  sensor_frame:
+    # 타입 string, 현재값 'os_sensor'
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "name to use when referring to the sensor frame"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    global_ref: frames.lidar_top
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    # global_ref: frames.TODO   # 전역 frame 규칙을 따른다면
+    lock_while_driving: true
+
+  sensor_hostname:
+    # 타입 string, 현재값 '', 드라이버 문서상 필수
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "hostname or IP address of the sensor (IP4 or IP6)"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    lock_while_driving: true
+
+  timestamp_mode:
+    # 타입 string, 현재값 ''
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "method used to timestamp measurements; packet of a LidarScan as the timestamp of the IMU, PointCloud2 and LaserScan messages"
+    layer: device
+    readback_via: { service: "/ouster/get_config", json_path: "$.timestamp_mode" }
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # 허용 값 출처: 드라이버의 parameter file 주석
+    enum: ["TIME_FROM_INTERNAL_OSC", "TIME_FROM_SYNC_PULSE_IN", "TIME_FROM_PTP_1588", "TIME_FROM_ROS_TIME"]
+    lock_while_driving: true
+
+  udp_dest:
+    # 타입 string, 현재값 ''
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "hostname or multicast group IP where the sensor will send UDP data packets"
+    layer: device
+    readback_via: { service: "/ouster/get_config", json_path: "$.udp_dest" }
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # enum: []          # 허용 값이 정해져 있으면 적는다
+    lock_while_driving: true
+
+  udp_profile_lidar:
+    # 타입 string, 현재값 ''
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "lidar packet profile"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    # 허용 값 출처: 드라이버의 parameter file 주석
+    enum: ["LEGACY", "RNG19_RFL8_SIG16_NIR16", "RNG15_RFL8_NIR8", "RNG19_RFL8_SIG16_NIR16_DUAL", "FUSA_RNG15_RFL8_NIR8_DUAL"]
+    lock_while_driving: true
+
+  use_system_default_qos:
+    # 타입 bool, 현재값 False
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "if false, data are published with sensor data QoS. This is preferrable for production but default QoS is needed for rosbag. See: https://github.com/ros2/rosbag2/issues/125"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+
+  v_reduction:
+    # 타입 int, 현재값 1
+    # 설명 출처: 드라이버의 parameter file 주석
+    description: "vertical beam reduction; available options: {1, 2, 4, 8, 16}"
+    layer: driver
+    apply: restart       # 드라이버에 add_on_set_parameters_callback 이 없다
+    tier: engineer
+    lock_while_driving: true
+

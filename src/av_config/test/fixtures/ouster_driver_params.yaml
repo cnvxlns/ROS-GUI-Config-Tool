@@ -1,0 +1,96 @@
+# ouster-ros config/driver_params.yaml 에서 발췌한 테스트 픽스처.
+# 출처: https://github.com/ouster-lidar/ouster-ros (ros2 브랜치)
+# 주석 표기 형식(중괄호형 enum, 불릿형 enum, 줄바꿈된 여는 말)을 그대로 보존했다.
+
+ouster/os_driver:
+  ros__parameters:
+    # sensor_hostname[required]: hostname or IP address of the sensor (IP4 or
+    # IP6).
+    sensor_hostname: ''
+
+    # lidar_mode[optional]: resolution and rate; possible values: { 512x10,
+    # 512x20, 1024x10, 1024x20, 2048x10, 4096x5 }. Leave empty to remain on
+    # current the lidar mode.
+    lidar_mode: ''
+
+    # timestamp_mode[optional]: method used to timestamp measurements; possible
+    # values:
+    # - TIME_FROM_INTERNAL_OSC
+    # - TIME_FROM_SYNC_PULSE_IN
+    # - TIME_FROM_PTP_1588
+    # - TIME_FROM_ROS_TIME: This option uses the time of reception of first
+    #                       packet of a LidarScan as the timestamp of the IMU,
+    #                       PointCloud2 and LaserScan messages.
+    timestamp_mode: ''
+
+    # ptp_utc_tai_offset[optional]: UTC/TAI offset in seconds to apply when
+    # TIME_FROM_PTP_1588 timestamp mode is used.
+    ptp_utc_tai_offset: -37.0
+
+    # udp_profile_lidar[optional]: lidar packet profile; possible values:
+    # - LEGACY: not recommended
+    # - RNG19_RFL8_SIG16_NIR16
+    # - RNG15_RFL8_NIR8
+    # - RNG19_RFL8_SIG16_NIR16_DUAL
+    # - FUSA_RNG15_RFL8_NIR8_DUAL (deprecated, renamed to RNG15_RFL8_NIR8_DUAL)
+    # - RNG15_RFL8_NIR8_DUAL (requires FW3.2+)
+    # - RNG15_RFL8_WIN8 (requires FW3.2+)
+    # - RNG15_RFL8_NIR8_ZONE16 (requires FW3.2+)
+    # - RNG19_RFL8_SIG16_NIR16_ZONE16 (requires FW3.2+)
+    # - RNG19_RFL8_SIG16_NIR16_RGB16 (requires FW4.0+)
+    # - RNG19_RFL8_SIG16_NIR16_RGB16_DUAL (requires FW4.0+)
+    udp_profile_lidar: ''
+
+    # columns_per_packet[optional]: number of columns per packet; possible values: {1, 2, 4, 8, 16, 32, 64};
+    # default is 0 (unset); requires FW4.0+.
+    columns_per_packet: 0
+
+    # gyro_fsr[optional]: gyroscope full-scale range; possible values: {NORMAL, EXTENDED},
+    # default is '' (unset; requires FW 3.1+).
+    gyro_fsr: ''
+
+    # lidar_port[optional]: port value should be in the range [0, 65535]. If you
+    # use 0 as the port value then the first available port number will be
+    # assigned.
+    lidar_port: 0
+
+    # pub_static_tf[optional]: when this flag is set to True, the driver will
+    # broadcast the TF transforms for the imu/sensor/lidar frames. Prevent the
+    # driver from broadcasting TF transforms by setting this parameter to False.
+    pub_static_tf: true
+
+    # proc_mask[optional]: use any combination of the 6 flags IMG, PCL, IMU, SCAN
+    # RAW and TLM to enable or disable their respective messages.
+    proc_mask: IMU|PCL|SCAN|IMG|RAW|TLM
+
+    # point_type[optional]: choose from: {original, native, xyz, xyzi, o_xyzi,
+    #                                     xyzir, xyzrgb, xyzrgba, color_point}
+    # Here is a breif description of each option:
+    #  - original: This uses the original point representation ouster_ros::Point
+    #          of the ouster-ros driver.
+    #  - native: directly maps all fields as published by the sensor to an
+    #          equivalent point cloud representation with the additon of ring
+    #          and timestamp fields.
+    #  - xyz: the simplest point type, only has {x, y, z}
+    #  - xyzi: same as xyz point type but adds intensity (signal) field. this
+    #          type is not compatible with the low data profile.
+    #  - o_xyzi: same as xyzi point type but doesn't add the extra 4 padding bytes.
+    #  - xyzir: same as xyzi type but adds ring (channel) field.
+    #          this type is same as Velodyne point cloud type
+    #          this type is not compatible with the low data profile.
+    #  - xyzrgb: same as xyz point type but adds RGB color fields.
+    #  - xyzrgba: same as xyzrgb point type but publishes the packed color as
+    #          PCL's RGBA field with an opaque alpha channel.
+    #  - color_point: same as the original point type but adds RGB color fields.
+    # for more details about the fields of each point type and their data refer
+    # to the following header files:
+    # - ouster_ros/os_point.h
+    # - ouster_ros/sensor_point_types.h
+    # - ouster_ros/common_point_types.h.
+    point_type: original
+
+    # min_range[optional]: minimum lidar range to consider (meters).
+    min_range: 0.0
+
+    # azimuth window start[optional]: values range [0, 360000] millidegrees
+    azimuth_window_start: 0

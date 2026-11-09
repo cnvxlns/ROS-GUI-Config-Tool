@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>av_bringup</name>
+  <version>0.1.0</version>
+  <description>서브시스템 launch 파일. services.yaml 의 launch 명령이 가리키는 패키지.</description>
+  <maintainer email="vialaboratory.pnu@gmail.com">han-yu</maintainer>
+  <license>Proprietary</license>
+
+  <!--
+    이 패키지는 파라미터를 직접 갖지 않는다. parameter file 을 services.yaml 의
+    param_files 순서대로 넘기는 일만 한다(명세 §12.1-8). launch 에 인라인
+    parameters=[{...}] 를 쓰면 Config App 이 해소할 수 없는 drift 가 생긴다.
+  -->
+  <exec_depend>ouster_ros</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

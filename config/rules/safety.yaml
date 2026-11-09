@@ -1,0 +1,20 @@
+# 안전 게이트 설정 (명세 §10.1)
+#
+# mode:
+#   open    - 차량 상태 미수신 시 적용을 허용한다. 모든 적용에 경고 로그를 남긴다.
+#             개발·벤치 테스트 전용.
+#   enforce - 차량 상태 미수신 시 잠금 (fail-safe). 차량 탑재 운영.
+#
+# M2 구현 중에는 open, M3 에서 enforce 로 전환한다(§13.1).
+
+mode: open
+
+# TBD(§13.2): 차량 상태 토픽 이름과 메시지 타입
+vehicle_state:
+  topic: ""
+  type: ""
+  # 토픽을 받지 못한 상태로 이 시간이 지나면 경고를 올린다
+  stale_after_sec: 3.0
+
+# 속도가 이 값을 넘으면 주행 중으로 간주한다
+moving_speed_threshold_mps: 0.05

@@ -1,0 +1,7 @@
+# camera_front 서브시스템 parameter file
+
+/camera_front/camera:
+  ros__parameters:
+    serial_no: ""
+    rgb_camera.profile: "1280x720x30"
+    enable_depth: false

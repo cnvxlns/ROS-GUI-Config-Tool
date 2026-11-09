@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>av_config</name>
+  <version>0.1.0</version>
+  <description>Web Configure App 백엔드. 웹 서버와 ROS 2 클라이언트를 겸하는 노드.</description>
+  <maintainer email="vialaboratory.pnu@gmail.com">han-yu</maintainer>
+  <license>Proprietary</license>
+
+  <depend>rclpy</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>diagnostic_msgs</depend>
+
+  <!--
+    FastAPI / uvicorn / pydantic / ruamel.yaml / pygit2 는 rosdep 이 아니라
+    venv 로 설치한다(명세 §7.1). Ubuntu 24.04 의 python3-fastapi 는 Pydantic v1 에
+    묶이므로 apt 경로를 쓰지 않는다.
+
+      python3 -m venv --system-site-packages /opt/av_config/.venv
+      /opt/av_config/.venv/bin/pip install \
+        "fastapi>=0.115" "uvicorn[standard]" "pydantic>=2.9" ruamel.yaml pygit2
+  -->
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

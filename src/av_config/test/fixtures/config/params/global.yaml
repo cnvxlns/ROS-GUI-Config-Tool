@@ -1,0 +1,18 @@
+# 시스템 전역 설정 (명세 §4.1 global 계층)
+#
+# 이 파일은 모든 unit 의 param_files 마지막에 들어가므로 노드별 값을 덮는다.
+# 노드별 재정의가 필요한 파라미터는 이 파일에 두지 않는다.
+#
+# 한 줄 변경이 센서 스택 전체 재시작을 유발한다(§6.1 전역 변경 처리).
+
+/**:
+  ros__parameters:
+    use_sim_time: false
+
+/ouster/os_driver:
+  ros__parameters:
+    sensor_frame: lidar_top_link
+
+/camera_front/camera:
+  ros__parameters:
+    camera_frame: camera_front_link

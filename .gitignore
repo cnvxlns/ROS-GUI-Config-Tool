@@ -1,0 +1,23 @@
+# colcon
+build/
+install/
+log/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# frontend
+node_modules/
+frontend/dist/
+
+# backend에서 서빙할 프론트엔드 빌드 산출물 (frontend/dist에서 복사됨)
+src/av_config/av_config/static/
+.pytest_cache/
+.ruff_cache/
+.venv-dev/
+
+# 드라이버가 실행 중에 쓰는 센서 메타데이터 (ouster_ros 가 cwd 에 남긴다)
+*-metadata.json

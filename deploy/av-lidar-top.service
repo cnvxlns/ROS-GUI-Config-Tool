@@ -1,0 +1,52 @@
+# lidar_top 서브시스템 systemd 유닛 (명세 §11.2).
+#
+# services.yaml 의 unit: av-lidar-top.service 가 이 파일이다. 이름이 어긋나면
+# Config App 이 계획 단계에서 재시작 대상을 찾지 못한다.
+#
+# 이 유닛이 없으면 UI 의 "적용"이 마지막 단계에서 실패한다. ouster_ros 의 모든
+# 파라미터가 apply: restart 이기 때문이다 (드라이버에
+# add_on_set_parameters_callback 이 없다 — config/overlays/ouster_ros.yaml 참고).
+#
+# 이 파일은 **실차 IPC/Jetson 기준**이다. Ubuntu 24.04 + ROS 2 jazzy 네이티브.
+# 개발 호스트(Ubuntu 26.04)는 네이티브 jazzy 가 없으므로
+# deploy/dev-host/av-lidar-top.service 를 쓴다.
+
+[Unit]
+Description=Ouster OS-2-128 driver (lidar_top)
+After=network-online.target
+Wants=network-online.target
+# 센서를 기다리는 것이 이 유닛의 일이다. 몇 시간 꺼져 있는 센서도 기다려야 하므로
+# 기동 비율 제한(기본 10초에 5회)을 두지 않는다. StartLimitIntervalSec 는 [Unit]
+# 섹션 키다 — [Service] 에 쓰면 조용히 무시된다.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# TBD: 전용 사용자. 드라이버는 UDP 7502/7503 수신과 센서 HTTP 접근만 필요하므로
+# root 가 필요하지 않다. av-config.service 의 User=avconfig 와 같은 처리를 한다.
+#User=avdriver
+
+Environment=ROS_DOMAIN_ID=0
+Environment=AV_CONFIG_ROOT=/opt/av_config
+
+# TBD: 워크스페이스 설치 경로. 배포 규약이 아직 정해지지 않았다(명세에 없음).
+# config/ 는 /opt/av_config 로 간다는 것만 정해져 있다(README §3).
+ExecStart=/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/av_ws/install/setup.bash && exec ros2 launch av_bringup lidar_top.launch.py config_root:=/opt/av_config'
+
+# 센서가 아직 안 올라왔으면 os_driver 가 finalized 로 가고 launch 가 스스로
+# 종료한다(av_bringup/launch/lidar_top.launch.py). 센서를 기다리는 일은 여기서
+# 한다. 적용 트랜잭션의 read-back 타임아웃보다 짧게 둬야 재시작이 관측된다.
+# on-failure 가 아니라 always 다. configure 실패 시 launch 는 **정상 종료**한다
+# (av_bringup/launch/lidar_top.launch.py 의 Shutdown 이벤트, exit 0). on-failure
+# 는 exit 0 을 실패로 보지 않으므로 재시작이 걸리지 않고, 센서가 잠깐 끊겼다가
+# 돌아와도 유닛이 inactive(dead) 로 남는다 — 2026-11-09 13:28 에 실제로 그렇게
+# 됐다 ("Couldn't get active config for: 10.5.5.87" 뒤 그대로 멈춤).
+Restart=always
+RestartSec=5
+
+
+# ros2 launch 는 SIGTERM 에 자식 노드를 정리한다. 여유를 둔다.
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
