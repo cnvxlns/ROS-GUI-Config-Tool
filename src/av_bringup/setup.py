@@ -15,7 +15,7 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="han-yu",
+    maintainer="dhkim",
     maintainer_email="vialaboratory.pnu@gmail.com",
     description="서브시스템 launch 파일",
     license="Proprietary",
