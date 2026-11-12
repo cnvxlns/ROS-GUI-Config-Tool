@@ -114,6 +114,46 @@ export interface OnboardingStepDTO {
   done: boolean | null
 }
 
+/**
+ * 드롭다운에 쓸 선택지 (§4.1 / §4.2 / §4.3).
+ *
+ * 타입(Layer, ApplyMethod, Tier)은 위에서 이미 정의했다. 여기서는 **열거할 수 있는
+ * 값**만 따로 둔다. read_only 는 뺐다 — 드라이버가 선언하는 것이지 사람이 고르는
+ * 등급이 아니다 (onboarding.py 의 editable_params 참고).
+ */
+export const LAYERS: readonly Layer[] = ['device', 'driver', 'global', 'host']
+export const APPLY_METHODS: readonly ApplyMethod[] = [
+  'runtime',
+  'reconfigure',
+  'restart',
+]
+export const TIERS: readonly Tier[] = ['operator', 'engineer', 'hidden']
+
+/** 파라미터 하나에 대해 사람이 정한 값. 비우면 초안에 TODO 가 남는다. */
+export interface ParamChoice {
+  label?: string | null
+  layer?: Layer | null
+  apply?: ApplyMethod | null
+  tier?: Tier | null
+  readback_service?: string | null
+  readback_json_path?: string | null
+}
+
+/** 초안의 TODO 자리에 넣을 값 (§12.2). */
+export interface OnboardingChoices {
+  launch?: string | null
+  driver?: string | null
+  /** null = 아직 안 봤다, {} = 확인했고 감시할 토픽이 없다 */
+  topic_hz?: Record<string, number> | null
+  /** null = 아직 안 봤다, [] = 확인했고 없다 */
+  required_services?: string[] | null
+  layer?: Layer | null
+  apply?: ApplyMethod | null
+  tier?: Tier | null
+  readback_service?: string | null
+  params?: Record<string, ParamChoice>
+}
+
 export interface OnboardingDTO {
   node: string
   registered: boolean
@@ -128,6 +168,12 @@ export interface OnboardingDTO {
   services_snippet: string
   param_file_draft: string
   schema_draft: string
+
+  /** 화면이 무엇을 물어봐야 하는지. 초안을 파싱하지 않게 서버가 준다. */
+  topics: string[]
+  editable_params: string[]
+  /** 초안에 남은 TODO 자리 수. 0 이면 그대로 쓸 수 있다. */
+  todo_count: number
 
   steps: OnboardingStepDTO[]
   notes: string[]

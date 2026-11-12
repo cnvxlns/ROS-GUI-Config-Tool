@@ -25,6 +25,9 @@ const DRAFT: OnboardingDTO = {
     { number: 3, title: '실제 장치로 파라미터 수집', detail: '장치 연결 상태에서', done: true },
     { number: 5, title: '스키마 파일 작성', detail: 'TODO 를 채운다', done: false },
   ],
+  topics: ['/gnss/fix'],
+  editable_params: ['baudrate', 'serial_port'],
+  todo_count: 2,
   notes: ['services.yaml 에 없어 변경을 저장할 곳이 없다. 등록 전까지 이 노드는 읽기 전용이다.'],
 }
 
@@ -124,4 +127,105 @@ describe('OnboardingPanel', () => {
     expect(screen.queryByText('1. services.yaml 에 등록')).toBeNull()
     expect(screen.getByRole('button', { name: '등록 방법 보기' })).toBeTruthy()
   })
+  // ------------------------------------------------ TODO 채우기 폼 (§12.2)
+
+  it('ROS 가 알려줄 수 없는 자리만 폼으로 묻는다', async () => {
+    vi.stubGlobal('fetch', stubFetch({ '/onboarding': DRAFT }))
+    renderWithQuery(<OnboardingPanel node={unregistered} />)
+
+    await waitFor(() => expect(screen.getByText('채워야 할 자리')).toBeTruthy())
+    expect(screen.getByText('launch 명령')).toBeTruthy()
+    expect(screen.getByText('드라이버 패키지 이름')).toBeTruthy()
+    // 기본값 드롭다운과 파라미터별 예외 표의 머리글에 각각 나온다
+    expect(screen.getAllByText('계층').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('적용').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('등급').length).toBeGreaterThan(0)
+  })
+
+  it('기대 주기는 자동으로 채우지 않고 사람에게 묻는다', async () => {
+    vi.stubGlobal('fetch', stubFetch({ '/onboarding': DRAFT }))
+    renderWithQuery(<OnboardingPanel node={unregistered} />)
+
+    await waitFor(() => expect(screen.getByText('/gnss/fix')).toBeTruthy())
+    // 측정값을 기대값으로 굳히면 성능 저하가 영구히 정상으로 기록된다
+    expect(screen.getByText(/공칭값. 지금 측정값이 아니다/)).toBeTruthy()
+  })
+
+  it('고른 값을 서버로 보내 초안을 다시 만든다', async () => {
+    const sent: unknown[] = []
+    vi.stubGlobal(
+      'fetch',
+      stubFetch({ '/onboarding': DRAFT }, (_path, body) => {
+        sent.push(body)
+        return { ...DRAFT, todo_count: 0, schema_draft: 'driver: ouster_ros\n' }
+      }),
+    )
+    renderWithQuery(<OnboardingPanel node={unregistered} />)
+    await waitFor(() => expect(screen.getByText('채워야 할 자리')).toBeTruthy())
+
+    await userEvent.type(screen.getByPlaceholderText('ouster_ros'), 'gnss_imu_driver')
+
+    // 글자마다 한 번씩 보낸다. 마지막 요청이 최종 입력을 담고 있어야 한다.
+    await waitFor(() => {
+      const last = sent[sent.length - 1] as { driver?: string }
+      expect(last?.driver).toBe('gnss_imu_driver')
+    })
+  })
+
+  it('남은 자리가 있으면 왜 위험한지 알린다', async () => {
+    vi.stubGlobal('fetch', stubFetch({ '/onboarding': DRAFT }))
+    renderWithQuery(<OnboardingPanel node={unregistered} />)
+    await waitFor(() =>
+      expect(screen.getByText(/채우지 않은 자리가 2개 남았다/)).toBeTruthy(),
+    )
+    expect(screen.getByText(/적용 방식이 틀린 채로/)).toBeTruthy()
+  })
+
+  it('다 채우면 그대로 쓸 수 있다고 알린다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubFetch({ '/onboarding': DRAFT }, () => ({
+        ...DRAFT,
+        todo_count: 0,
+        schema_draft: 'driver: gnss_imu_driver\n',
+      })),
+    )
+    renderWithQuery(<OnboardingPanel node={unregistered} />)
+    await waitFor(() => expect(screen.getByText('채워야 할 자리')).toBeTruthy())
+
+    await userEvent.type(screen.getByPlaceholderText('ouster_ros'), 'x')
+
+    await waitFor(() =>
+      expect(screen.getByText(/채워야 할 자리를 모두 채웠다/)).toBeTruthy(),
+    )
+  })
+
+  it('device 계층을 고르면 조회 서비스를 묻는다', async () => {
+    vi.stubGlobal('fetch', stubFetch({ '/onboarding': DRAFT }, () => DRAFT))
+    renderWithQuery(<OnboardingPanel node={unregistered} />)
+    await waitFor(() => expect(screen.getByText('채워야 할 자리')).toBeTruthy())
+
+    // §4.4: device 계층은 readback_via 가 필수다
+    expect(screen.queryByPlaceholderText('/ouster/get_config')).toBeNull()
+    const layer = screen.getAllByRole('combobox')[0]!
+    await userEvent.selectOptions(layer, 'device')
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('/ouster/get_config')).toBeTruthy(),
+    )
+  })
+
+  it('안내 주석의 TODO 는 남은 자리로 세지 않는다', async () => {
+    const headerOnly = {
+      ...DRAFT,
+      todo_count: 0,
+      schema_draft: '# 아래 TODO 를 모두 채워야 한다\ndriver: gnss_imu_driver\n',
+    }
+    vi.stubGlobal('fetch', stubFetch({ '/onboarding': headerOnly }))
+    renderWithQuery(<OnboardingPanel node={unregistered} />)
+
+    await waitFor(() => expect(screen.getByText('3. 스키마 작성')).toBeTruthy())
+    expect(screen.queryByText(/^TODO \d/)).toBeNull()
+  })
 })
+

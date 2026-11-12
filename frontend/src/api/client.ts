@@ -7,6 +7,7 @@ import type {
   DiscoverySnapshotDTO,
   HistoryDTO,
   NodeParamsDTO,
+  OnboardingChoices,
   OnboardingDTO,
   ParamValue,
   SafetyStateDTO,
@@ -61,6 +62,27 @@ export function useOnboarding(node: string | null, enabled: boolean) {
     queryFn: () => getJson<OnboardingDTO>(`/onboarding${node}`),
     enabled: node !== null && enabled,
     staleTime: 30_000,
+  })
+}
+
+/**
+ * 사람이 정한 값을 박아 넣은 초안 (§12.2).
+ *
+ * 아무것도 저장하지 않는다. 생성 로직은 서버 한 곳에만 둔다 — 화면에서 문자열을
+ * 치환하면 YAML 들여쓰기와 따옴표 규칙이 두 곳으로 갈라진다.
+ */
+export function useOnboardingDraft(
+  node: string | null,
+  choices: OnboardingChoices,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ['onboarding-draft', node, choices],
+    queryFn: () =>
+      postJson<OnboardingDTO>(`/onboarding${node}`, choices),
+    enabled: node !== null && enabled,
+    // 입력할 때마다 이전 초안을 지우면 화면이 깜빡인다
+    placeholderData: (previous) => previous,
   })
 }
 

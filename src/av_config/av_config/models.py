@@ -423,6 +423,41 @@ class OnboardingStepDTO(BaseModel):
     done: bool | None = None
 
 
+class ParamChoiceDTO(BaseModel):
+    """파라미터 하나에 대해 사람이 정한 값 (§12.2).
+
+    None 은 "아직 정하지 않음"이다. 비워 두면 초안에 TODO 가 그대로 남는다.
+    """
+
+    label: str | None = None
+    layer: Layer | None = None
+    apply: ApplyMethod | None = None
+    tier: Tier | None = None
+    # ServiceRef 로 조립된다: { service: ..., json_path: ... }
+    readback_service: str | None = None
+    readback_json_path: str | None = None
+
+
+class OnboardingChoicesDTO(BaseModel):
+    """초안의 TODO 자리에 넣을 값.
+
+    params 의 항목이 기본값(layer/apply/tier)을 덮는다.
+    """
+
+    launch: str | None = None
+    driver: str | None = None
+    # None = 아직 안 봤다, {} = 확인했고 감시할 토픽이 없다
+    topic_hz: dict[str, float] | None = None
+    required_services: list[str] | None = None
+
+    layer: Layer | None = None
+    apply: ApplyMethod | None = None
+    tier: Tier | None = None
+    readback_service: str | None = None
+
+    params: dict[str, ParamChoiceDTO] = Field(default_factory=dict)
+
+
 class OnboardingDTO(BaseModel):
     """신규 센서를 등록하는 데 필요한 초안과 절차."""
 
@@ -439,6 +474,12 @@ class OnboardingDTO(BaseModel):
     services_snippet: str
     param_file_draft: str
     schema_draft: str
+
+    # 화면이 무엇을 물어봐야 하는지. 초안을 정규식으로 파싱하지 않게 서버가 준다.
+    topics: list[str] = Field(default_factory=list)
+    editable_params: list[str] = Field(default_factory=list)
+    # 초안에 남은 TODO 자리 수. 0 이면 그대로 쓸 수 있다.
+    todo_count: int = 0
 
     steps: list[OnboardingStepDTO] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)

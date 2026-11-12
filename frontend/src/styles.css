@@ -242,3 +242,56 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 0; padding: 12px; overflow-x: auto; max-height: 340px;
   font-family: var(--mono); font-size: 0.84em; line-height: 1.5;
 }
+
+/* 온보딩 TODO 채우기 폼 (§12.2) --------------------------------------- */
+
+.onboarding__form {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; background: var(--bg);
+}
+.onboarding__form h4 { margin: 0; }
+.onboarding__form > p { margin: 0; }
+
+.onboarding__fieldset {
+  border: 1px solid var(--border); border-radius: 6px;
+  margin: 0; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.onboarding__fieldset legend {
+  padding: 0 6px; font-size: 0.85em; color: var(--muted);
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > span { font-size: 0.88em; }
+.field--inline {
+  flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.field input[type='text'],
+.field input[type='number'],
+.field select {
+  padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--panel); color: var(--text); font: inherit;
+}
+.field input[type='text'] { font-family: var(--mono); font-size: 0.86em; }
+.field--inline input[type='number'] { width: 90px; }
+.field--inline code { font-size: 0.84em; }
+
+.onboarding__defaults { display: flex; gap: 14px; flex-wrap: wrap; }
+
+.onboarding__overrides summary {
+  cursor: pointer; font-size: 0.88em; color: var(--muted);
+}
+.onboarding__table {
+  width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.84em;
+}
+.onboarding__table th, .onboarding__table td {
+  border-bottom: 1px solid var(--border); padding: 4px 6px; text-align: left;
+}
+.onboarding__table th { color: var(--muted); font-weight: 500; }
+.onboarding__table input[type='text'],
+.onboarding__table select {
+  width: 100%; padding: 3px 5px; border: 1px solid var(--border);
+  border-radius: 4px; background: var(--panel); color: var(--text);
+  font: inherit; font-size: 0.95em;
+}
+.onboarding__table code { font-size: 0.95em; }

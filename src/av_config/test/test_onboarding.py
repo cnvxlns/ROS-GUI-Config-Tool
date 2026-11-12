@@ -24,8 +24,13 @@ from av_config.models import (  # noqa: E402
     ValueRange,
 )
 from av_config.onboarding import (  # noqa: E402
+    TODO,
+    OnboardingChoices,
+    ParamChoice,
     build_steps,
+    count_todo,
     driver_name,
+    editable_params,
     param_file_draft,
     schema_draft,
     services_snippet,
@@ -258,3 +263,147 @@ def test_steps_mark_done_when_fully_onboarded():
     by_number = {s.number: s for s in steps}
     assert by_number[5].done is True
     assert by_number[6].done is True
+
+
+# ------------------------------------------------- 사람이 정한 값 채우기 (§12.2)
+
+
+def test_choices_fill_launch_and_expect_hz(params):
+    choices = OnboardingChoices(
+        launch="ros2 launch gnss_bringup gnss.launch.py",
+        topic_hz={"/gnss/fix": 10.0},
+    )
+    text = services_snippet(NODE, ["/gnss/fix"], choices=choices)
+    loaded = yaml.load("subsystems:\n" + text)
+    sub = loaded["subsystems"]["gnss_imu"]
+
+    assert sub["launch"] == "ros2 launch gnss_bringup gnss.launch.py"
+    assert sub["topics"][0]["expect_hz"] == 10.0
+    assert TODO not in text
+
+
+def test_expect_hz_is_not_guessed_from_measurement(params):
+    """측정값을 자동으로 넣지 않는다.
+
+    지금 8.5 Hz 로 도는 센서의 측정값을 기대값으로 굳히면 성능 저하가 영구히
+    정상으로 기록된다. 사람이 공칭값을 넣어야 한다.
+    """
+    text = services_snippet(NODE, ["/gnss/fix"])
+    assert "expect_hz: 0.0" in text
+    assert TODO in text
+
+
+def test_choices_fill_param_layer_apply_tier(params):
+    choices = OnboardingChoices(layer="driver", apply="runtime", tier="operator")
+    text = schema_draft(NODE, params, ["/gnss_imu/driver/reset"], choices=choices)
+    parsed = DriverSchema.model_validate(yaml.load(text))
+
+    assert parsed.params["baudrate"].layer.value == "driver"
+    assert parsed.params["baudrate"].apply.value == "runtime"
+    assert parsed.params["baudrate"].tier.value == "operator"
+
+
+def test_param_override_beats_the_default(params):
+    choices = OnboardingChoices(
+        layer="driver",
+        apply="runtime",
+        tier="operator",
+        params={"baudrate": ParamChoice(apply="restart", tier="engineer")},
+    )
+    parsed = DriverSchema.model_validate(
+        yaml.load(schema_draft(NODE, params, [], choices=choices))
+    )
+
+    assert parsed.params["baudrate"].apply.value == "restart"
+    assert parsed.params["baudrate"].tier.value == "engineer"
+    # 덮지 않은 자리는 기본값을 따른다
+    assert parsed.params["baudrate"].layer.value == "driver"
+    assert parsed.params["rtk_enabled"].apply.value == "runtime"
+
+
+def test_device_layer_demands_readback_via(params):
+    """§4.4 의 짝. readback_via 없이 device 로 두면 TODO 가 남아야 한다."""
+    choices = OnboardingChoices(layer="device", apply="restart", tier="engineer")
+    text = schema_draft(NODE, params, [], choices=choices)
+
+    assert f"readback_via: {TODO}" in text
+    with pytest.raises(Exception):
+        DriverSchema.model_validate(yaml.load(text))
+
+
+def test_device_layer_with_readback_via_loads(params):
+    choices = OnboardingChoices(
+        layer="device",
+        apply="restart",
+        tier="engineer",
+        readback_service="/gnss_imu/driver/get_device_config",
+        params={
+            name: ParamChoice(readback_json_path=f"$.{name}")
+            for name in editable_params(params)
+        },
+    )
+    text = schema_draft(NODE, params, [], choices=choices)
+    parsed = DriverSchema.model_validate(yaml.load(text))
+
+    assert parsed.params["baudrate"].layer.value == "device"
+    assert parsed.params["baudrate"].readback_via.service == (
+        "/gnss_imu/driver/get_device_config"
+    )
+    assert parsed.params["baudrate"].readback_via.json_path == "$.baudrate"
+
+
+def test_fully_answered_draft_has_no_todo_left(params):
+    """폼을 다 채우면 TODO 가 0 이어야 한다. 이것이 1단계의 합격 기준이다."""
+    choices = OnboardingChoices(
+        launch="ros2 launch gnss_bringup gnss.launch.py",
+        driver="gnss_imu_driver",
+        topic_hz={"/gnss/fix": 10.0},
+        layer="driver",
+        apply="restart",
+        tier="engineer",
+        params={
+            name: ParamChoice(label=f"{name} 라벨") for name in editable_params(params)
+        },
+    )
+    snippet = services_snippet(NODE, ["/gnss/fix"], choices=choices)
+    draft = param_file_draft(NODE, params)
+    schema = schema_draft(NODE, params, ["/gnss_imu/driver/reset"], choices=choices)
+
+    assert count_todo(snippet, draft, schema) == 0
+    DriverSchema.model_validate(yaml.load(schema))
+    ServicesFile.model_validate(yaml.load("subsystems:\n" + snippet))
+
+
+def test_global_ref_hint_is_not_counted_as_todo():
+    """선택 항목이다. 집계에 섞이면 '다 채웠는데 TODO 가 남는다'가 된다."""
+    text = schema_draft(
+        NODE,
+        [param("frame_id", ParamType.STRING, "x")],
+        [],
+        choices=OnboardingChoices(
+            driver="gnss_imu_driver",
+            required_services=[],
+            layer="driver", apply="restart", tier="engineer",
+            params={"frame_id": ParamChoice(label="프레임")},
+        ),
+    )
+    assert "global_ref" in text
+    assert count_todo(text) == 0
+
+
+def test_editable_params_excludes_read_only(params):
+    names = editable_params(params)
+    assert "baudrate" in names
+    assert "driver_version" not in names
+
+
+def test_required_services_can_be_declared_empty(params):
+    """'확인했고 없다'와 '아직 안 봤다'는 다르다."""
+    unknown = schema_draft(NODE, params, [])
+    declared = schema_draft(
+        NODE, params, [], choices=OnboardingChoices(required_services=[])
+    )
+
+    assert f"required_services: []   # {TODO}" in unknown
+    assert "required_services: []\n" in declared
+    assert f"required_services: []   # {TODO}" not in declared

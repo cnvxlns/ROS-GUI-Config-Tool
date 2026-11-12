@@ -529,6 +529,67 @@ def test_onboarding_filters_standard_parameter_services(rig: Rig):
     assert "describe_parameters" not in required
 
 
+def test_onboarding_post_fills_the_todo_slots(rig: Rig):
+    """폼에서 고른 값이 초안에 박혀 나와야 한다 (§12.2)."""
+    node = "/gnss_imu/driver"
+    before = rig.client.get(f"/api/v1/onboarding{node}").json()
+    assert before["todo_count"] > 0
+
+    body = rig.client.post(
+        f"/api/v1/onboarding{node}",
+        json={
+            "launch": "ros2 launch gnss_bringup gnss.launch.py",
+            "driver": "gnss_imu_driver",
+            "required_services": [],
+            "layer": "driver",
+            "apply": "restart",
+            "tier": "engineer",
+            "topic_hz": {t: 10.0 for t in before["topics"]},
+            "params": {
+                name: {"label": name} for name in before["editable_params"]
+            },
+        },
+    ).json()
+
+    assert body["todo_count"] == 0
+    assert "TODO" not in body["schema_draft"]
+    assert "TODO" not in body["services_snippet"]
+    assert "ros2 launch gnss_bringup gnss.launch.py" in body["services_snippet"]
+
+
+def test_onboarding_post_does_not_write_anything(rig: Rig):
+    """services.yaml 은 코드 리뷰를 거쳐야 한다. 이 엔드포인트는 본문만 돌려준다."""
+    node = "/gnss_imu/driver"
+    rig.client.post(
+        f"/api/v1/onboarding{node}",
+        json={"driver": "gnss_imu_driver", "layer": "driver"},
+    )
+    # 등록 상태가 바뀌면 안 된다. 여전히 초안만 돌려주는 단계다.
+    again = rig.client.get(f"/api/v1/onboarding{node}").json()
+    assert again["registered"] is False
+    assert again["todo_count"] > 0
+
+
+def test_onboarding_get_is_unchanged_by_the_post_route(rig: Rig):
+    """선택값 없이 부르면 예전과 같은 초안이어야 한다."""
+    node = "/gnss_imu/driver"
+    got = rig.client.get(f"/api/v1/onboarding{node}").json()
+    posted = rig.client.post(f"/api/v1/onboarding{node}", json={}).json()
+    assert got["schema_draft"] == posted["schema_draft"]
+    assert got["services_snippet"] == posted["services_snippet"]
+
+
+def test_onboarding_device_layer_needs_readback_service(rig: Rig):
+    """§4.4 의 짝. 서비스를 안 고르면 TODO 가 남아야 한다."""
+    node = "/gnss_imu/driver"
+    body = rig.client.post(
+        f"/api/v1/onboarding{node}",
+        json={"layer": "device", "apply": "restart", "tier": "engineer"},
+    ).json()
+    assert "readback_via: TODO" in body["schema_draft"]
+    assert body["todo_count"] > 0
+
+
 def test_onboarding_snippet_uses_real_names_for_registered_node(rig: Rig):
     """추론한 이름을 보여주면 그대로 붙여 넣었을 때 중복 등록이 된다."""
     snippet = rig.client.get(f"/api/v1/onboarding{LIDAR}").json()["services_snippet"]

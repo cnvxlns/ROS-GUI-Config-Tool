@@ -23,6 +23,7 @@ from .models import (
     ChangeSetResult,
     DiscoverySnapshotDTO,
     NodeParamsDTO,
+    OnboardingChoicesDTO,
     OnboardingDTO,
     OnboardingStepDTO,
     Role,
@@ -30,8 +31,12 @@ from .models import (
     SafetyRules,
 )
 from .onboarding import (
+    OnboardingChoices,
+    ParamChoice,
     build_steps,
+    count_todo,
     driver_name,
+    editable_params,
     param_file_draft,
     schema_draft,
     services_snippet,
@@ -168,6 +173,20 @@ def build_router(
         자동 수집 결과로 services.yaml 조각, parameter file, 스키마 초안을 만든다.
         계층·적용 방식·등급은 ROS 가 알려줄 수 없으므로 TODO 로 남는다.
         """
+        return await _onboarding(node, OnboardingChoicesDTO())
+
+    @router.post("/onboarding/{node:path}", response_model=OnboardingDTO)
+    async def onboarding_draft(
+        node: str, choices: OnboardingChoicesDTO
+    ) -> OnboardingDTO:
+        """사람이 정한 값을 박아 넣은 초안 (§12.2).
+
+        아무것도 저장하지 않는다. services.yaml 과 스키마는 코드 리뷰를 거쳐
+        리포에 들어가야 하므로, 이 엔드포인트는 붙여 넣을 본문만 돌려준다.
+        """
+        return await _onboarding(node, choices)
+
+    async def _onboarding(node: str, choices: OnboardingChoicesDTO) -> OnboardingDTO:
         fq = normalize_node_name(node)
         collected = await discovery.collect_params(fq)
         dto = collected.node
@@ -222,6 +241,39 @@ def build_router(
             has_param_file=bool(dto.param_files),
         )
 
+        picked = OnboardingChoices(
+            launch=choices.launch,
+            driver=choices.driver,
+            topic_hz=None if choices.topic_hz is None else dict(choices.topic_hz),
+            required_services=choices.required_services,
+            layer=choices.layer.value if choices.layer else None,
+            apply=choices.apply.value if choices.apply else None,
+            tier=choices.tier.value if choices.tier else None,
+            readback_service=choices.readback_service,
+            params={
+                name: ParamChoice(
+                    label=item.label,
+                    layer=item.layer.value if item.layer else None,
+                    apply=item.apply.value if item.apply else None,
+                    tier=item.tier.value if item.tier else None,
+                    readback_service=item.readback_service,
+                    readback_json_path=item.readback_json_path,
+                )
+                for name, item in choices.params.items()
+            },
+        )
+
+        snippet = services_snippet(
+            fq,
+            topics,
+            existing_subsystem=dto.subsystem,
+            existing_unit=dto.unit,
+            existing_param_files=dto.param_files or None,
+            choices=picked,
+        )
+        params_draft = param_file_draft(fq, collected.params)
+        schema = schema_draft(fq, collected.params, services, choices=picked)
+
         return OnboardingDTO(
             node=fq,
             registered=dto.registered,
@@ -231,15 +283,12 @@ def build_router(
             unit=dto.unit or unit_name(sub),
             param_file=f"params/{sub}.yaml",
             schema_file=f"schemas/{driver_name(fq)}.yaml",
-            services_snippet=services_snippet(
-                fq,
-                topics,
-                existing_subsystem=dto.subsystem,
-                existing_unit=dto.unit,
-                existing_param_files=dto.param_files or None,
-            ),
-            param_file_draft=param_file_draft(fq, collected.params),
-            schema_draft=schema_draft(fq, collected.params, services),
+            services_snippet=snippet,
+            param_file_draft=params_draft,
+            schema_draft=schema,
+            topics=topics,
+            editable_params=editable_params(collected.params),
+            todo_count=count_todo(snippet, params_draft, schema),
             steps=[OnboardingStepDTO(**vars(step)) for step in steps],
             notes=notes,
         )

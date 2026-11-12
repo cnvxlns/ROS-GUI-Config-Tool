@@ -7,6 +7,10 @@
 **초안은 초안이다.** 계층(layer), 적용 방식(apply), 노출 등급(tier) 은 ROS 가
 알려주지 않는다. 어떤 파라미터가 장치 펌웨어에 쓰이는지, 실행 중 바꿀 수 있는지는
 드라이버 문서와 장치 명세를 봐야 한다. 그래서 그 자리는 TODO 로 남긴다.
+
+사람이 그 자리를 정하면 OnboardingChoices 로 받아 초안에 박아 넣는다. 생성 로직을
+여기 한 곳에 두는 이유는, 화면에서 문자열을 치환하면 들여쓰기와 YAML 따옴표 규칙이
+두 곳으로 갈라지기 때문이다. 화면은 무엇을 물어볼지만 알면 된다.
 """
 
 from __future__ import annotations
@@ -20,6 +24,64 @@ from .paramdoc import ParamDoc
 
 # 사람이 반드시 확인해야 하는 자리
 TODO = "TODO"
+
+
+@dataclass
+class ParamChoice:
+    """파라미터 하나에 대해 사람이 정한 값. None 은 아직 정하지 않았다는 뜻이다."""
+
+    label: str | None = None
+    layer: str | None = None
+    apply: str | None = None
+    tier: str | None = None
+    # layer 가 device 면 필수다 (§4.4). 노드 파라미터를 되읽으면 요청값이 그대로
+    # 돌아와서, 장치가 값을 거부하거나 보정한 경우를 감지할 수 없기 때문이다.
+    #
+    # ServiceRef 형태로 들어간다: { service: "...", json_path: "$...." }.
+    # 장치 전체 설정을 JSON 으로 돌려주는 조회 서비스가 흔하므로(ouster 의
+    # /ouster/get_config 가 그렇다) 서비스는 노드 전체가 공유하고 json_path 만
+    # 파라미터마다 다른 경우가 보통이다.
+    readback_service: str | None = None
+    readback_json_path: str | None = None
+
+
+@dataclass
+class OnboardingChoices:
+    """초안의 TODO 자리에 넣을 값.
+
+    params 의 항목이 기본값(layer/apply/tier)을 덮는다. 대부분의 파라미터가 같은
+    계층·적용 방식을 쓰므로 기본값을 한 번 고르고 예외만 덮는 편이 빠르다.
+    """
+
+    launch: str | None = None
+    driver: str | None = None
+    # 토픽 이름 -> 기대 주기(Hz). None 은 "아직 안 봤다", 빈 dict 는 "확인했고
+    # 감시할 토픽이 없다"는 뜻이다. 둘을 구분해야 TODO 가 영영 남지 않는다.
+    topic_hz: dict[str, float] | None = None
+    required_services: list[str] | None = None
+
+    # 모든 파라미터에 적용할 기본값
+    layer: str | None = None
+    apply: str | None = None
+    tier: str | None = None
+    readback_service: str | None = None
+
+    params: dict[str, ParamChoice] = field(default_factory=dict)
+
+    def for_param(self, name: str) -> ParamChoice:
+        """기본값 위에 파라미터별 선택을 덮은 결과."""
+        override = self.params.get(name) or ParamChoice()
+        return ParamChoice(
+            label=override.label,
+            layer=override.layer or self.layer,
+            apply=override.apply or self.apply,
+            tier=override.tier or self.tier,
+            readback_service=override.readback_service or self.readback_service,
+            readback_json_path=override.readback_json_path,
+        )
+
+
+_NO_CHOICES = OnboardingChoices()
 
 _TYPE_NAME = {
     ParamType.NOT_SET: "미설정",
@@ -130,6 +192,7 @@ def services_snippet(
     existing_subsystem: str | None = None,
     existing_unit: str | None = None,
     existing_param_files: list[str] | None = None,
+    choices: OnboardingChoices = _NO_CHOICES,
 ) -> str:
     """services.yaml 의 subsystems 아래에 붙여 넣을 조각 (§11.2).
 
@@ -151,20 +214,42 @@ def services_snippet(
         "# unit, launch 는 실제 배포 구성에 맞게 고쳐야 한다.",
         f"  {sub}:",
         f"    unit: {unit}",
-        f'    launch: "ros2 launch av_bringup {sub}.launch.py"   # {TODO}: 실제 launch 파일',
+        _launch_line(sub, choices.launch),
         "    # 순서가 저장값을 결정한다. global.yaml 이 뒤에 와서 전역 값이 이긴다.",
         f"    param_files: [{', '.join(param_files)}]",
         f'    nodes: ["{node}"]',
     ]
+    picked_hz = choices.topic_hz or {}
     if topics:
         lines.append("    topics:")
         for topic in topics:
-            lines.append(
-                f'      - {{ name: "{topic}", expect_hz: 0.0 }}   # {TODO}: ros2 topic hz 로 확인'
-            )
+            lines.append(_topic_line(topic, picked_hz.get(topic)))
+    elif choices.topic_hz is not None:
+        # 사람이 "감시할 토픽 없음"을 명시했다.
+        lines.append("    # topics: 감시할 토픽 없음")
     else:
         lines.append(f"    # topics: 점검 규칙이 감시할 주요 토픽을 적는다 ({TODO})")
     return "\n".join(lines) + "\n"
+
+
+def _launch_line(sub: str, launch: str | None) -> str:
+    if launch:
+        return f"    launch: {yaml_scalar(launch)}"
+    return (
+        f'    launch: "ros2 launch av_bringup {sub}.launch.py"'
+        f"   # {TODO}: 실제 launch 파일"
+    )
+
+
+def _topic_line(topic: str, hz: float | None) -> str:
+    """점검 규칙이 감시할 토픽 한 줄.
+
+    expect_hz 는 측정값이 아니라 **공칭값**이다. 지금 측정한 값을 그대로 적으면
+    현재의 성능 저하를 정상으로 굳히게 된다. 그래서 자동으로 채우지 않는다.
+    """
+    if hz is None:
+        return f'      - {{ name: "{topic}", expect_hz: 0.0 }}   # {TODO}: ros2 topic hz 로 확인'
+    return f'      - {{ name: "{topic}", expect_hz: {hz!r} }}' 
 
 
 def param_file_draft(node: str, params: list[ParamDTO]) -> str:
@@ -201,6 +286,7 @@ def schema_draft(
     params: list[ParamDTO],
     services: list[str],
     docs: dict[str, ParamDoc] | None = None,
+    choices: OnboardingChoices = _NO_CHOICES,
 ) -> str:
     """스키마 초안 (§4.4).
 
@@ -211,28 +297,22 @@ def schema_draft(
     ParameterDescriptor 를 채우지 않는 드라이버에서는 설명과 허용 값을 여기서만
     얻을 수 있다. 다만 드라이버 문서가 틀렸을 수 있으므로 사람이 확인해야 한다.
     """
-    driver = driver_name(node)
+    driver = choices.driver or driver_name(node)
     lines = [
-        f"# config/schemas/{driver}.yaml",
-        "#",
-        f"# {node} 의 자동 수집 결과로 만든 초안이다.",
-        "# 이름, 타입, 범위, 설명은 describe_parameters 에서 가져왔다.",
-        "#",
-        f"# 아래 {TODO} 를 모두 채워야 쓸 수 있다. 특히:",
-        "#   layer: device 로 두면 readback_via 가 필수다 (명세 §4.4).",
-        "#          노드 파라미터를 되읽으면 요청값이 그대로 돌아오므로,",
-        "#          장치가 값을 거부·보정한 경우를 감지할 수 없기 때문이다.",
-        "#   apply: runtime / reconfigure / restart 중 하나.",
-        "#          드라이버가 add_on_set_parameters_callback 을 구현했는지 확인한다.",
-        "",
-        f"driver: {driver}   # {TODO}: 실제 드라이버 패키지 이름",
+        f"driver: {driver}"
+        if choices.driver
+        else f"driver: {driver}   # {TODO}: 실제 드라이버 패키지 이름",
         "match:",
         f'  node_name_regex: "^{re.escape(node)}$"',
     ]
-    if services:
+    required = choices.required_services if choices.required_services is not None else services
+    if required:
         lines.append("  required_services:")
-        for service in services:
+        for service in required:
             lines.append(f'    - "{service}"')
+    elif choices.required_services is not None:
+        # 사람이 "없음"을 명시했다. 더 물어볼 것이 없다.
+        lines.append("  required_services: []")
     else:
         lines.append(
             f"  required_services: []   # {TODO}: ros2 service list 로 확인"
@@ -242,15 +322,51 @@ def schema_draft(
 
     if not params:
         lines.append("  # 수집된 파라미터가 없다. 노드가 실행 중인지 확인하라.")
-        return "\n".join(lines) + "\n"
+        return _with_header(node, driver, lines)
 
     for param in sorted(params, key=lambda p: p.name):
-        lines.extend(_param_block(param, (docs or {}).get(param.name)))
+        lines.extend(
+            _param_block(
+                param, (docs or {}).get(param.name), choices.for_param(param.name)
+            )
+        )
 
-    return "\n".join(lines) + "\n"
+    return _with_header(node, driver, lines)
 
 
-def _param_block(param: ParamDTO, doc: ParamDoc | None = None) -> list[str]:
+def _with_header(node: str, driver: str, body: list[str]) -> str:
+    """머리말을 붙여 완성한다.
+
+    머리말을 본문보다 **뒤에** 만드는 이유는 count_todo 때문이다. "아래 TODO 를
+    채워라"라는 안내문에 TODO 라는 낱말이 들어가면 남은 자리 수가 부풀려지고,
+    다 채운 초안도 영영 0 이 되지 않는다. 그래서 본문을 먼저 만들어 세고, 남은
+    자리가 있을 때만 안내문을 붙인다.
+    """
+    text = "\n".join(body) + "\n"
+    header = [
+        f"# config/schemas/{driver}.yaml",
+        "#",
+        f"# {node} 의 자동 수집 결과로 만든 초안이다.",
+        "# 이름, 타입, 범위, 설명은 describe_parameters 에서 가져왔다.",
+    ]
+    if TODO in text:
+        header += [
+            "#",
+            f"# 아래 {TODO} 를 모두 채워야 쓸 수 있다. 특히:",
+            "#   layer: device 로 두면 readback_via 가 필수다 (명세 §4.4).",
+            "#          노드 파라미터를 되읽으면 요청값이 그대로 돌아오므로,",
+            "#          장치가 값을 거부·보정한 경우를 감지할 수 없기 때문이다.",
+            "#   apply: runtime / reconfigure / restart 중 하나.",
+            "#          드라이버가 add_on_set_parameters_callback 을 구현했는지 확인한다.",
+        ]
+    return "\n".join(header) + "\n\n" + text
+
+
+def _param_block(
+    param: ParamDTO,
+    doc: ParamDoc | None = None,
+    choice: ParamChoice | None = None,
+) -> list[str]:
     type_name = _TYPE_NAME.get(param.type, str(param.type))
     facts = [f"타입 {type_name}"]
     if param.runtime_value is not None:
@@ -288,11 +404,35 @@ def _param_block(param: ParamDTO, doc: ParamDoc | None = None) -> list[str]:
     else:
         lines.pop()
 
-    lines.append(f'    label: "{TODO}"')
+    choice = choice or ParamChoice()
     enum_values = param.enum_values or (doc.enum if doc else None)
-    lines.append(f"    layer: driver        # {TODO}: device 면 readback_via 필수")
-    lines.append(f"    apply: restart       # {TODO}: runtime / reconfigure / restart")
-    lines.append(f"    tier: engineer       # {TODO}: operator / engineer / hidden")
+
+    if choice.label:
+        lines.append(f"    label: {yaml_scalar(choice.label)}")
+    else:
+        # label 은 선택 항목이다 (ParamSchema.label 은 None 을 허용하고, 화면은
+        # 없으면 파라미터 이름을 그대로 쓴다). TODO 로 두면 파라미터 수만큼
+        # 가짜 숙제가 쌓여서 "다 채웠는데 TODO 41개"가 된다.
+        lines.append('    # label: "표시 이름"   # 비우면 파라미터 이름을 쓴다')
+
+    if choice.layer:
+        lines.append(f"    layer: {choice.layer}")
+        if choice.layer == "device":
+            # §4.4 가 요구하는 짝이다. 고르지 않았으면 비워 두지 않고 TODO 를
+            # 남긴다 — 빈 값으로 넘어가면 스키마 로드가 조용히 깨진다.
+            lines.append(_readback_line(choice))
+    else:
+        lines.append(f"    layer: driver        # {TODO}: device 면 readback_via 필수")
+
+    if choice.apply:
+        lines.append(f"    apply: {choice.apply}")
+    else:
+        lines.append(f"    apply: restart       # {TODO}: runtime / reconfigure / restart")
+
+    if choice.tier:
+        lines.append(f"    tier: {choice.tier}")
+    else:
+        lines.append(f"    tier: engineer       # {TODO}: operator / engineer / hidden")
     if enum_values:
         # 드라이버 문서에서 가져온 값이다. 펌웨어 버전에 따라 다를 수 있으므로
         # 장치에서 한 번 확인하는 편이 안전하다.
@@ -301,10 +441,25 @@ def _param_block(param: ParamDTO, doc: ParamDoc | None = None) -> list[str]:
     elif param.type == ParamType.STRING:
         lines.append("    # enum: []          # 허용 값이 정해져 있으면 적는다")
     if _looks_like_frame(param.name):
-        lines.append(f"    # global_ref: frames.{TODO}   # 전역 frame 규칙을 따른다면")
+        # 선택 항목이라 TODO 로 세지 않는다. 전역 frame 규칙을 쓰는 프로젝트만
+        # 주석을 풀면 된다.
+        lines.append("    # global_ref: frames.<이름>   # 전역 frame 규칙을 따른다면")
     lines.append("    lock_while_driving: true")
     lines.append("")
     return lines
+
+
+def _readback_line(choice: ParamChoice) -> str:
+    """device 계층 파라미터의 readback_via 한 줄 (§4.4).
+
+    ServiceRef 는 매핑이다. 문자열로 쓰면 스키마 로드가 거부한다.
+    """
+    if not choice.readback_service:
+        return f"    readback_via: {TODO}   # device 계층은 필수다 (§4.4)"
+    parts = [f"service: {yaml_scalar(choice.readback_service)}"]
+    if choice.readback_json_path:
+        parts.append(f"json_path: {yaml_scalar(choice.readback_json_path)}")
+    return "    readback_via: { " + ", ".join(parts) + " }"
 
 
 def _looks_like_frame(name: str) -> bool:
@@ -315,6 +470,28 @@ def _looks_like_frame(name: str) -> bool:
     """
     leaf = name.rsplit(".", 1)[-1]
     return leaf == "frame_id" or leaf.endswith(("_frame", "_frame_id"))
+
+
+def count_todo(*drafts: str) -> int:
+    """초안에 남은 TODO 자리 수.
+
+    화면이 정규식으로 다시 세지 않게 서버가 알려준다. 초안 문자열을 만드는 쪽이
+    세야 두 곳의 규칙이 갈라지지 않는다.
+    """
+    return sum(draft.count(TODO) for draft in drafts)
+
+
+def editable_params(params: list[ParamDTO]) -> list[str]:
+    """layer / apply / tier 를 사람이 정해야 하는 파라미터 이름.
+
+    read_only 는 드라이버가 못 바꾼다고 선언했으므로 초안이 driver/restart/read_only
+    로 확정해 둔다. 물어볼 필요가 없다 (_param_block 참고).
+    """
+    return [
+        param.name
+        for param in sorted(params, key=lambda p: p.name)
+        if not (param.read_only or param.tier is Tier.READ_ONLY)
+    ]
 
 
 def build_steps(
