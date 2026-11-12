@@ -30,7 +30,7 @@ from .rosutil import (
 )
 from .schema import SchemaRegistry
 from .services_map import ServicesMap
-from .store import ParamStore, normalize_node_name
+from .store import ParamStore, is_internal_node, normalize_node_name
 
 _log = logging.getLogger(__name__)
 
@@ -279,6 +279,7 @@ class Discovery:
             name=fq_name,
             alive=alive,
             registered=subsystem is not None,
+            internal=is_internal_node(fq_name, self_name=self._node.get_name()),
             subsystem=subsystem_name,
             unit=subsystem.unit if subsystem else None,
             param_files=list(subsystem.param_files) if subsystem else [],

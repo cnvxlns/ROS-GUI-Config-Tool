@@ -31,6 +31,7 @@ export function makeNode(over: Partial<NodeDTO> = {}): NodeDTO {
     name: '/ouster/os_driver',
     alive: true,
     registered: true,
+    internal: false,
     subsystem: 'lidar_top',
     unit: 'av-lidar-top.service',
     param_files: ['params/lidar_top.yaml', 'params/global.yaml'],

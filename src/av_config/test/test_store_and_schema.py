@@ -24,6 +24,7 @@ from av_config.store import (  # noqa: E402
     ParamStore,
     flatten_params,
     key_specificity,
+    is_internal_node,
     normalize_node_name,
 )
 
@@ -348,3 +349,52 @@ def test_no_drift_when_param_is_not_in_any_file():
 def test_numeric_type_difference_is_not_drift():
     entry = SavedEntry(value=10, source="params/lidar_top.yaml")
     assert is_drift(entry, 10.0, reachable=True) is False
+
+
+# ------------------------------------------- ROS 내부 노드 판정 (§8.1)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        # tf2 가 TransformListener 객체마다 만든다. 뒤는 메모리 주소다.
+        "/transform_listener_impl_5b043ac74e90",
+        "/transform_listener_impl_5e04bb1b1580",
+        # ros2 launch 의 관리 노드. 숫자는 런치 프로세스의 PID 다.
+        "/launch_ros_7",
+        "/launch_ros_1970619",
+        # ROS 2 는 밑줄로 시작하는 이름을 hidden 으로 본다.
+        "/_ros2cli_daemon_0_dcb3b08e53f54f9b81d6e2fffd561f0a",
+    ],
+)
+def test_internal_nodes_are_recognized(name):
+    assert is_internal_node(name) is True
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "/ouster/os_driver",
+        "/rviz",
+        "/cartographer_occupancy_grid_node",
+        "/cartographer_pbstream_map_publisher",
+        "/submaps_display",
+        # 이름이 비슷해도 실제 드라이버일 수 있다. 패턴을 정확히 지켜야 한다.
+        "/transform_listener",
+        "/launch_ros_manager",
+    ],
+)
+def test_real_nodes_are_not_internal(name):
+    assert is_internal_node(name) is False
+
+
+def test_config_app_counts_itself_as_internal():
+    """그래프를 읽으려고 스스로 노드가 된다. 설정 대상은 아니다."""
+    assert is_internal_node("/av_config_app", self_name="av_config_app") is True
+    assert is_internal_node("/av_config_app") is False
+    # 다른 노드까지 같이 감추면 안 된다
+    assert is_internal_node("/ouster/os_driver", self_name="av_config_app") is False
+
+
+def test_internal_check_normalizes_the_name():
+    assert is_internal_node("launch_ros_7") is True

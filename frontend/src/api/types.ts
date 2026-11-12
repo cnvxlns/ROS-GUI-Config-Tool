@@ -71,6 +71,8 @@ export interface NodeDTO {
   alive: boolean
   /** services.yaml 에 등록됐는지. 미등록이면 변경을 저장할 곳이 없어 읽기 전용이다. */
   registered: boolean
+  /** ROS 가 스스로 만든 내부 노드. 이름이 매번 바뀌어 등록할 수 없다 (§8.1). */
+  internal: boolean
   subsystem: string | null
   unit: string | null
   param_files: string[]

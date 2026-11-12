@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import os
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
@@ -39,6 +40,40 @@ def normalize_node_name(name: str) -> str:
     """정규화된 노드 이름(선행 슬래시 포함)을 돌려준다."""
     name = name.strip()
     return name if name.startswith("/") else "/" + name
+
+
+# ROS 가 스스로 만드는 노드. 이름에 PID 나 메모리 주소가 들어가 **실행할 때마다
+# 바뀌므로** services.yaml 에 적을 수 없다. 등록 대상이 될 수 없는 노드들이다.
+#
+#   /transform_listener_impl_5b043ac74e90
+#       rclcpp 가 tf2_ros::TransformListener 객체마다 자동 생성한다. 뒤의 16진수는
+#       그 C++ 객체의 메모리 주소다. 파라미터 서비스를 열지 않으므로 열면 404 가
+#       난다 — 고장이 아니라 원래 그런 노드다.
+#   /launch_ros_7
+#       ros2 launch 의 관리 노드. 숫자는 런치 프로세스의 PID 다.
+#   /_ros2cli_daemon_0_dcb3b08e...
+#       ros2 CLI 데몬. ROS 2 는 밑줄로 시작하는 이름을 hidden 으로 취급하고
+#       `ros2 node list` 도 --all 없이는 감춘다. 그 관례를 그대로 따른다.
+_INTERNAL_PATTERNS = (
+    re.compile(r"^/transform_listener_impl_[0-9a-f]+$"),
+    re.compile(r"^/launch_ros_\d+$"),
+    re.compile(r"^/_"),
+)
+
+
+def is_internal_node(name: str, self_name: str | None = None) -> bool:
+    """ROS 가 만든 내부 노드인지. 목록에서 접어 둘 대상이다 (§8.1).
+
+    self_name 은 Config App 자신의 노드다. 그래프를 읽으려고 스스로 노드가 되므로
+    자기 목록에 잡히는데, 설정 대상은 아니다.
+
+    감추지 않고 **접어 둔다.** 노드가 안 보이면 드라이버가 안 떴는지 필터에
+    걸렸는지 구분할 수 없고, 그 혼동이 디버깅에서 더 비싸다.
+    """
+    name = normalize_node_name(name)
+    if self_name is not None and name == normalize_node_name(self_name):
+        return True
+    return any(pattern.match(name) for pattern in _INTERNAL_PATTERNS)
 
 
 def _plain(value: Any) -> Any:

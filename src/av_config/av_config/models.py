@@ -245,6 +245,9 @@ class NodeDTO(BaseModel):
     # services.yaml 에 등록됐는지. 등록되지 않으면 변경을 저장할 곳이 없어
     # 읽기 전용이 된다 (§11.2, §12.2).
     registered: bool = False
+    # ROS 가 스스로 만든 내부 노드인지 (store.is_internal_node). 이름이 실행할
+    # 때마다 바뀌어 등록 자체가 불가능하므로 목록에서 접어 둔다 (§8.1).
+    internal: bool = False
     subsystem: str | None = None
     unit: str | None = None
     param_files: list[str] = Field(default_factory=list)
