@@ -5,12 +5,55 @@ import { OnboardingPanel } from './OnboardingPanel'
 import { ParamField } from './ParamField'
 import type { ParamDTO } from '../api/types'
 
+/**
+ * 파라미터를 못 읽었을 때 (§5.3).
+ *
+ * 서버가 503 과 함께 사유를 준다. 그 사유를 그대로 보여주고 무엇을 확인해야
+ * 하는지 덧붙인다 — 날 에러 문자열만 띄우면 노드가 사라진 것처럼 읽힌다.
+ */
+function UnreachableNode({ node, error }: { node: string; error: unknown }) {
+  const message = error instanceof Error ? error.message : String(error)
+  // "503 /x: 파라미터 서비스에 ..." 에서 상태 코드를 떼어 사유만 남긴다
+  const reason = message.replace(/^\d{3}\s+/, '')
+  const unavailable = message.startsWith('503')
+
+  return (
+    <section className="panel panel--warn">
+      <h2>
+        <code>{node}</code>
+      </h2>
+      <p>{reason}</p>
+      {unavailable && (
+        <>
+          <p className="muted">
+            노드는 ROS 그래프에 있지만 파라미터 서비스가 응답하지 않는다. 노드가
+            사라진 것은 아니다.
+          </p>
+          <ul className="muted small">
+            <li>
+              tf2 리스너처럼 파라미터 서비스를 <strong>애초에 열지 않는</strong>{' '}
+              내부 노드일 수 있다. 그런 노드는 목록에서 접혀 있다.
+            </li>
+            <li>
+              다른 장비의 노드라면 네트워크 지연으로 3초 안에 응답하지 못한 것이다.
+            </li>
+            <li>
+              직접 만든 드라이버라면 <code>start_parameter_services=false</code> 로
+              떠 있는지 확인한다.
+            </li>
+          </ul>
+        </>
+      )}
+    </section>
+  )
+}
+
 export function ParamEditor({ node }: { node: string }) {
   const { data, isLoading, error } = useNodeParams(node)
   const { data: safety } = useSafety()
 
   if (isLoading) return <p className="muted">파라미터를 수집하는 중…</p>
-  if (error) return <p className="error">{String(error)}</p>
+  if (error) return <UnreachableNode node={node} error={error} />
   if (!data) return null
 
   // 주행 중이거나 권한이 없으면 적용 버튼을 비활성화하고 사유를 표시한다 (§8.2).

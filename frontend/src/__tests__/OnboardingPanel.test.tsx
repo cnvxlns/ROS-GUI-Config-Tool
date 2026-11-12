@@ -4,6 +4,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OnboardingPanel } from '../components/OnboardingPanel'
+import { ParamEditor } from '../components/ParamEditor'
 import type { OnboardingDTO } from '../api/types'
 import { makeNode } from './factories'
 import { renderWithQuery, stubFetch } from './renderWithQuery'
@@ -229,3 +230,25 @@ describe('OnboardingPanel', () => {
   })
 })
 
+describe('파라미터 서비스에 닿지 않는 노드 (§5.3)', () => {
+  it('503 을 노드가 사라진 것처럼 보여주지 않는다', async () => {
+    vi.stubGlobal('fetch', async () =>
+      new Response(
+        JSON.stringify({
+          detail:
+            '/transform_listener_impl_5b043ac74e90: 파라미터 서비스에 접근할 수 없다 ' +
+            '(/transform_listener_impl_5b043ac74e90/list_parameters).',
+        }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    renderWithQuery(<ParamEditor node="/transform_listener_impl_5b043ac74e90" />)
+
+    await waitFor(() =>
+      expect(screen.getByText(/파라미터 서비스에 접근할 수 없다/)).toBeTruthy(),
+    )
+    expect(screen.getByText(/노드가 사라진 것은 아니다/)).toBeTruthy()
+    // 상태 코드는 사유 앞에 붙여 보여주지 않는다
+    expect(screen.queryByText(/^503 /)).toBeNull()
+  })
+})

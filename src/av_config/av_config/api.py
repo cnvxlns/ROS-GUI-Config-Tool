@@ -145,7 +145,12 @@ def build_router(
         fq = normalize_node_name(node)
         result = await discovery.collect_params(fq)
         if result.node.unreachable_reason and not result.params:
-            raise HTTPException(status_code=404, detail=f"{fq}: {result.node.unreachable_reason}")
+            # 404 가 아니라 503 이다. 노드는 ROS 그래프에 **있고**, 응답하지 않는
+            # 것은 그 노드의 파라미터 서비스다. 404 로 두면 "그런 노드 없음"으로
+            # 읽혀서, 목록에 보이는 노드를 눌렀는데 없다고 하는 모순이 된다.
+            raise HTTPException(
+                status_code=503, detail=f"{fq}: {result.node.unreachable_reason}"
+            )
         return result
 
     @router.get("/safety")

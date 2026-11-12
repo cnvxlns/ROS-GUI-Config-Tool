@@ -198,9 +198,16 @@ def test_old_route_shape_is_gone(rig: Rig):
     assert rig.client.get(f"/api/v1/nodes{LIDAR}/params").status_code == 404
 
 
-def test_unreachable_node_without_params_is_404(rig: Rig):
+def test_unreachable_node_without_params_is_503_not_404(rig: Rig):
+    """노드는 그래프에 있다. 응답하지 않는 것은 그 노드의 파라미터 서비스다.
+
+    404 로 두면 목록에 보이는 노드를 눌렀는데 "없다"고 답하는 모순이 된다.
+    tf2 리스너나 원격 노드가 여기에 해당한다.
+    """
     response = rig.client.get("/api/v1/params/nope/node")
-    assert response.status_code == 200 or response.status_code == 404
+    assert response.status_code in (200, 503)
+    if response.status_code == 503:
+        assert "파라미터 서비스에 접근할 수 없다" in response.json()["detail"]
 
 
 def test_safety_reports_mode_and_permission(rig: Rig):
