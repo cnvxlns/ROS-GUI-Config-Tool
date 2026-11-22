@@ -395,6 +395,9 @@ docker exec -it ros2-jazzy bash
 ```bash
 # (1) 의존성. Ubuntu 24.04 는 시스템 pip 설치를 막으므로(PEP 668) venv 를 쓴다.
 #     apt 의 python3-fastapi 는 Pydantic v1 에 묶이므로 쓰지 않는다 (명세 §7.1).
+#     osrf/ros:jazzy-desktop 이미지에는 python3-venv 가 없어 먼저 깔아야 한다.
+#     컨테이너 안은 root 라 sudo 는 필요 없다.
+apt-get update && apt-get install -y python3-venv
 mkdir -p /opt/av_config
 python3 -m venv --system-site-packages /opt/av_config/.venv
 /opt/av_config/.venv/bin/pip install \
