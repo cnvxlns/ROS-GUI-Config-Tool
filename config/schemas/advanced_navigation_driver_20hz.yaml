@@ -1,0 +1,20 @@
+driver: advanced_navigation_driver_20hz
+match:
+  node_name_regex: "^/advanced_navigation_driver_20hz$"
+
+params:
+  port:
+    description: "NTRIP 릴레이가 시작할 때 드라이버에 가상 시리얼 포트를 할당한다."
+    layer: driver
+    apply: restart
+    tier: read_only
+  topic_prefix:
+    description: "NTRIP 릴레이와 데이터 흐름 점검에서 사용하는 /INS 토픽 접두사."
+    layer: driver
+    apply: restart
+    tier: read_only
+  use_sim_time:
+    description: "실센서 실행에서 false를 사용한다."
+    layer: driver
+    apply: restart
+    tier: read_only

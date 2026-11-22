@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from math import isfinite
 from typing import Any
 
 from .hostcheck import CHECKS
@@ -41,6 +42,13 @@ _ARRAY_ELEMENT_TYPES: dict[int, tuple[type, ...]] = {
 }
 
 
+def _valid_double(value: int | float) -> bool:
+    try:
+        return isfinite(value)
+    except OverflowError:
+        return False
+
+
 def check_type(param: ParamDTO, value: Any) -> str | None:
     """값이 파라미터 타입에 맞는지. 맞으면 None, 아니면 사유."""
     ptype = int(param.type)
@@ -58,6 +66,8 @@ def check_type(param: ParamDTO, value: Any) -> str | None:
             return f"bool 은 {_name(ptype)} 자리에 올 수 없다"
         if not isinstance(value, allowed):
             return f"{_name(ptype)} 이어야 하는데 {type(value).__name__} 이 왔다"
+        if ptype == ParamType.DOUBLE and not _valid_double(value):
+            return "유한한 실수 범위를 벗어났다"
         return None
 
     if ptype in _ARRAY_ELEMENT_TYPES:
@@ -69,6 +79,8 @@ def check_type(param: ParamDTO, value: Any) -> str | None:
                 return f"[{index}] 에 bool 이 올 수 없다"
             if not isinstance(item, allowed):
                 return f"[{index}] 가 {type(item).__name__} 이다"
+            if ptype == ParamType.DOUBLE_ARRAY and not _valid_double(item):
+                return f"[{index}] 가 유한한 실수 범위를 벗어났다"
             if ptype == ParamType.BYTE_ARRAY and not 0 <= int(item) <= 255:
                 return f"[{index}] 가 바이트 범위(0~255)를 벗어났다"
         return None

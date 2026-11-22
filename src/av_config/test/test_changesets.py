@@ -79,6 +79,7 @@ class FakeDiscovery:
             "point_type": "original",
             "use_sim_time": False,
         }
+        self.runtime_types: dict[str, ParamType] = {}
         self.missing_nodes: set[str] = set()
         #: 서비스가 아직 뜨지 않은 노드. 재시작 직후를 흉내낸다.
         self.unready_nodes: set[str] = set()
@@ -119,7 +120,9 @@ class FakeDiscovery:
             runtime = self.runtime.get(name)
             param = ParamDTO(
                 name=name,
-                type=ParamType.BOOL if isinstance(runtime, bool) else ParamType.STRING,
+                type=self.runtime_types.get(
+                    name, ParamType.BOOL if isinstance(runtime, bool) else ParamType.STRING
+                ),
                 runtime_value=runtime,
                 saved_value=entry.value if entry else None,
                 saved_source=entry.source if entry else None,
@@ -418,6 +421,27 @@ def test_dry_run_plan_shows_unit_impact(rig: Rig):
 
 
 # ---------------------------------------------------------------- 성공 경로
+
+
+@pytest.mark.parametrize(
+    ("param_type", "value", "expected"),
+    [(ParamType.DOUBLE, 600, 600.0), (ParamType.DOUBLE_ARRAY, [1, 2.5], [1.0, 2.5])],
+)
+def test_integer_json_values_are_saved_as_declared_ros_doubles(rig, param_type, value, expected):
+    name = "test_gain"
+    rig.discovery.runtime_types[name] = param_type
+    rig.discovery.runtime[name] = expected
+    rig.verifier.readback[name] = expected
+
+    result = submit(rig, changes=[ChangeRequest(node=LIDAR, param=name, value=value)])
+
+    assert result.status is ChangeSetStatus.SUCCEEDED, result.message
+    persisted = saved(rig, name)
+    assert persisted == expected
+    if isinstance(expected, list):
+        assert all(isinstance(item, float) for item in persisted)
+    else:
+        assert isinstance(persisted, float)
 
 
 def test_success_writes_commits_and_verifies(rig: Rig):

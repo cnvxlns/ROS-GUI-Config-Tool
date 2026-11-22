@@ -89,7 +89,7 @@ cd frontend && npm install && npm run build && cd ..
 
 실행 스크립트는 Python 소스 경로를 추가하므로 웹앱의 별도 `colcon build`는 필요 없다.
 
-웹에서 Ouster 설정을 변경하려면 실행 중인 센서 터미널을 `Ctrl+C`로 종료한 후
+웹에서 Ouster, Velodyne 또는 INS 드라이버 설정을 변경하려면 실행 중인 센서 터미널을 `Ctrl+C`로 종료한 후
 `./run_live_1_sensors.sh --managed`로 시작한다. 기존 터미널 1 스크립트가 사용자
 systemd 서비스에서 실행된다. `vls_ws`를 쓰면 센서와 웹앱 명령 모두에
 `AV_CONFIG_SENSOR_WORKSPACE=vls`를 지정한다.
@@ -97,7 +97,9 @@ systemd 서비스에서 실행된다. `vls_ws`를 쓰면 센서와 웹앱 명령
 웹앱과 센서 서비스는 `~/av_config/live/` 아래의 워크스페이스·도메인별 설정과
 Git 이력을 공유한다. 초기값은 센서 워크스페이스의 `hardware.yaml`과 터미널 1의
 기본 인수에서 가져온다. 적용 시 터미널 1 전체가 재시작되어 Ouster, Velodyne,
-INS 데이터가 잠시 끊긴다. Velodyne와 INS의 파라미터는 조회할 수 있다.
+INS 데이터가 잠시 끊긴다. Velodyne 드라이버 변경은 `params/velodyne.yaml`에 기록된다.
+INS 드라이버 변경은 `params/ins.yaml`에 기록된다. NTRIP 릴레이가 할당하는
+가상 시리얼 포트는 웹에서 조회할 수 있다.
 
 `./run_live_1_sensors.sh --stop`으로 서비스를 종료한다. 시작할 때 출력되는 이름으로
 `journalctl --user -fu <유닛 이름>`에서 센서 로그를 볼 수 있다. 일반 터미널에서

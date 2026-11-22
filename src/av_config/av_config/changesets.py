@@ -26,6 +26,7 @@ from .models import (
     Layer,
     ParamDTO,
     ParamResult,
+    ParamType,
     Role,
     ServiceRef,
     StepKind,
@@ -188,8 +189,19 @@ class ChangeSetRunner:
 
         # --- 3. 계획 -------------------------------------------------
         await emit("plan")
+        requested: dict[tuple[str, str], Any] = {}
+        for change in request.changes:
+            node = normalize_node_name(change.node)
+            param_type = params_by_node[node][change.param].type
+            value = change.value
+            # A whole number from JSON must still be a ROS double in the YAML.
+            if param_type == ParamType.DOUBLE:
+                value = float(value)
+            elif param_type == ParamType.DOUBLE_ARRAY:
+                value = [float(item) for item in value]
+            requested[(node, change.param)] = value
         try:
-            targets = self._plan_write_targets(request, nodes)
+            targets = self._plan_write_targets(requested, nodes)
         except ParamWriteError as exc:
             result.status = ChangeSetStatus.REJECTED
             result.issues = [
@@ -260,9 +272,6 @@ class ChangeSetRunner:
             return result
 
         # --- 5. 적용 + 6. 반영 확인 ----------------------------------
-        requested = {
-            (normalize_node_name(c.node), c.param): c.value for c in request.changes
-        }
         try:
             await self._execute(plan, requested, params_by_node, emit)
             await emit("verify")
@@ -443,13 +452,11 @@ class ChangeSetRunner:
             _log.error("작업 트리 복원 실패: %s", exc)
             return False
 
-    def _plan_write_targets(self, request: ChangeSetRequest, nodes: list[str]):
+    def _plan_write_targets(self, values: dict[tuple[str, str], Any], nodes: list[str]):
         targets = []
         for node in nodes:
             changes = {
-                c.param: c.value
-                for c in request.changes
-                if normalize_node_name(c.node) == node
+                name: value for (target_node, name), value in values.items() if target_node == node
             }
             targets.extend(
                 self._writer.plan_targets(
