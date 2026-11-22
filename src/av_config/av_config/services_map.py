@@ -63,6 +63,7 @@ class ServicesMap:
         for sub in self.subsystems.values():
             if sub.unit == unit:
                 out.extend(normalize_node_name(n) for n in sub.nodes)
+                out.extend(normalize_node_name(n) for n in sub.restart_companions)
         return out
 
     def all_nodes(self) -> list[str]:

@@ -118,15 +118,17 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     gate = SafetyGate(safety)
+    applier = Applier(node)
     runner = ChangeSetRunner(
         discovery=discovery,
         services=services,
         schemas=schemas,
         store=store,
         git=git,
-        applier=Applier(node),
+        applier=applier,
         verifier=Verifier(node),
         gate=gate,
+        restart_preflight=applier.check_restart_units,
     )
 
     static_dir = Path(__file__).parent / "static"

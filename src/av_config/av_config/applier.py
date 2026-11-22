@@ -61,6 +61,7 @@ class Applier:
         self._set_clients: dict[str, Any] = {}
         self._service_clients: dict[str, Any] = {}
         self._lock = asyncio.Lock()
+        self._systemctl_user = os.environ.get("AV_CONFIG_SYSTEMCTL_USER") == "1"
 
     # ------------------------------------------------------------------
     # runtime
@@ -164,6 +165,25 @@ class Applier:
     # restart
     # ------------------------------------------------------------------
 
+    def _systemctl_command(self) -> list[str]:
+        if self._systemctl_user:
+            return ["systemctl", "--user"]
+        prefix = shlex.split(os.environ.get("AV_CONFIG_SYSTEMCTL_PREFIX", ""))
+        return [*prefix, "systemctl"]
+
+    async def check_restart_units(self, units: list[str]) -> None:
+        """Check the live sensor service before writing parameters."""
+        if not self._systemctl_user:
+            return
+        for unit in units:
+            try:
+                await self._run_systemctl("is-active", [unit], timeout=5.0)
+            except ApplyError as exc:
+                raise ApplyError(
+                    f"{unit} 이 실행 중이 아닙니다. 기존 센서 터미널을 종료한 뒤 "
+                    "같은 워크스페이스에서 ./run_live_1_sensors.sh --managed 로 시작하세요."
+                ) from exc
+
     async def restart_units(self, units: list[str]) -> None:
         """unit 을 일괄 재시작한다 (§6.1 전역 변경 처리).
 
@@ -175,32 +195,32 @@ class Applier:
         """
         if not units:
             return
+        _log.info("재시작: %s", ", ".join(units))
+        await self._run_systemctl("restart", units, timeout=_RESTART_TIMEOUT)
+
+    async def _run_systemctl(self, operation: str, units: list[str], timeout: float) -> None:
         for unit in units:
             if not _looks_like_unit(unit):
                 raise ApplyError(f"unit 이름이 올바르지 않다: {unit!r}")
 
-        prefix = shlex.split(os.environ.get("AV_CONFIG_SYSTEMCTL_PREFIX", ""))
-        command = [*prefix, "systemctl", "restart", *units]
-        _log.info("재시작: %s", " ".join(command))
-
-        proc = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        command = [*self._systemctl_command(), operation, *units]
         try:
-            _stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), _RESTART_TIMEOUT
+            proc = await asyncio.create_subprocess_exec(
+                *command, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE
             )
+        except OSError as exc:
+            raise ApplyError(f"systemctl {operation} 실행 실패: {exc}") from exc
+        try:
+            _stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout)
         except TimeoutError as exc:
-            proc.kill()
-            raise ApplyError(
-                f"systemctl restart 가 {_RESTART_TIMEOUT}초 안에 끝나지 않았다"
-            ) from exc
+            if proc.returncode is None:
+                proc.kill()
+                await proc.wait()
+            raise ApplyError(f"systemctl {operation} 이 {timeout}초 안에 끝나지 않았다") from exc
 
         if proc.returncode != 0:
             raise ApplyError(
-                f"systemctl restart 실패 (exit {proc.returncode}): "
+                f"systemctl {operation} 실패 (exit {proc.returncode}): "
                 f"{stderr.decode(errors='replace').strip()}"
             )
 

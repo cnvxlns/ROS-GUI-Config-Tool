@@ -37,6 +37,12 @@ _log = logging.getLogger(__name__)
 _PUBLISHER_WAIT = 20.0
 
 
+def _diagnostic_level(value: int | bytes | bytearray) -> int:
+    # ROS IDL `byte` fields and constants are one-byte bytes on Jazzy, rather
+    # than ASCII digits. Normalize both messages and constants before comparing.
+    return value[0] if isinstance(value, (bytes, bytearray)) else int(value)
+
+
 @dataclass
 class ReadBack:
     value: Any
@@ -64,7 +70,7 @@ class DiagnosticsCache:
         now = time.time()
         for status in msg.status:
             key = status.hardware_id or status.name
-            self.by_name[key] = (int(status.level), status.message, now)
+            self.by_name[key] = (_diagnostic_level(status.level), status.message, now)
 
     def worst(self, keys: list[str], stale_after: float = 10.0) -> tuple[int, str] | None:
         now = time.time()
@@ -75,7 +81,7 @@ class DiagnosticsCache:
                 continue
             level, message, when = entry
             if now - when > stale_after:
-                level, message = DiagnosticStatus.STALE, "STALE"
+                level, message = _diagnostic_level(DiagnosticStatus.STALE), "STALE"
             if worst is None or level > worst[0]:
                 worst = (level, message)
         return worst
@@ -236,12 +242,12 @@ class Verifier:
         if worst is None:
             return True, None  # 보고가 없으면 판정하지 않는다
         level, message = worst
-        if level == DiagnosticStatus.OK:
+        if level == _diagnostic_level(DiagnosticStatus.OK):
             return True, None
         name = {
-            DiagnosticStatus.WARN: "WARN",
-            DiagnosticStatus.ERROR: "ERROR",
-            DiagnosticStatus.STALE: "STALE",
+            _diagnostic_level(DiagnosticStatus.WARN): "WARN",
+            _diagnostic_level(DiagnosticStatus.ERROR): "ERROR",
+            _diagnostic_level(DiagnosticStatus.STALE): "STALE",
         }.get(level, str(level))
         return False, f"/diagnostics {name}: {message}"
 
@@ -270,7 +276,7 @@ def _pick_response_field(response: Any, field_name: str | None) -> Any:
 def _walk_json_path(raw: Any, path: str) -> Any:
     """"$.config.lidar_mode" 같은 점 표기로 값을 꺼낸다.
 
-    배열 인덱스와 필터는 지원하지 않는다. 지원 범위를 넘는 경로는 오류로 알린다.
+    배열 인덱스는 $.azimuth_window.0 처럼 점 표기로 지정한다.
     """
     if isinstance(raw, (bytes, bytearray)):
         raw = raw.decode(errors="replace")
@@ -291,7 +297,10 @@ def _walk_json_path(raw: Any, path: str) -> Any:
     for part in cleaned.split("."):
         if not part:
             continue
-        if not isinstance(cursor, dict) or part not in cursor:
+        if isinstance(cursor, dict) and part in cursor:
+            cursor = cursor[part]
+        elif isinstance(cursor, list) and part.isascii() and part.isdecimal() and int(part) < len(cursor):
+            cursor = cursor[int(part)]
+        else:
             raise VerifyError(f"json_path {path} 의 {part} 를 찾을 수 없다")
-        cursor = cursor[part]
     return cursor

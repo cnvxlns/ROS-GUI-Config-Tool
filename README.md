@@ -32,6 +32,79 @@
 
 ---
 
+## ROS 2가 설치된 PC에서 기존 실센서 실행
+
+`~/map_ws` 또는 `~/Seonguk/vls_ws`가 이미 빌드되어 있으면, 이 프로젝트에서도
+기존 **터미널 1** 명령을 그대로 사용한다. 기본은 `map_ws`이며, 없으면 `vls_ws`를
+찾는다. 원래 스크립트에 인수를 그대로 전달하므로 Ouster, Velodyne, INS/NTRIP,
+센서 TF와 설정은 해당 워크스페이스의 구성을 사용한다.
+
+```bash
+# 터미널 1 — 기존 센서 실행
+cd ~/cnvxlns/ROS-GUI-Config-Tool
+./run_live_1_sensors.sh
+
+# 터미널 2 — 센서와 같은 ROS 환경에서 웹앱 실행
+cd ~/cnvxlns/ROS-GUI-Config-Tool
+./run_config_app.sh
+```
+
+브라우저: **http://127.0.0.1:8080/**. 각 터미널에서 `Ctrl+C`로 해당 프로세스를
+종료한다. 두 워크스페이스의 센서 명령을 동시에 실행하지 않는다.
+
+센서는 기본 `ROS_DOMAIN_ID=45`, `LOCALHOST` 탐색을 사용한다. 웹앱 실행 스크립트도
+선택한 워크스페이스의 `config/live_env.sh`를 읽어 같은 도메인과 드라이버 서비스
+타입을 사용한다. 기존의 도메인 0 실행 명령으로 켠 웹앱은 먼저 종료한다.
+웹앱에서는 가상환경의 Python 패키지를 센서 의존성 캐시보다 먼저 읽어
+FastAPI/Pydantic 버전 충돌을 피한다.
+
+`vls_ws`를 사용하려면 **두 터미널 모두** 같은 선택을 전달한다:
+
+```bash
+AV_CONFIG_SENSOR_WORKSPACE=vls ./run_live_1_sensors.sh
+AV_CONFIG_SENSOR_WORKSPACE=vls ./run_config_app.sh
+```
+
+`AV_CONFIG_SENSOR_WORKSPACE=map` 또는 워크스페이스의 절대 경로도 가능하다.
+기존 인수와 도메인 변경도 그대로 지원한다. `map_ws`는 `MAP_LIVE_ROS_DOMAIN_ID`,
+`vls_ws`는 `VLS_LIVE_ROS_DOMAIN_ID`를 두 터미널에 동일하게 지정한다.
+
+```bash
+./run_live_1_sensors.sh --dry-run          # 장치를 열지 않고 기존 명령 확인
+./run_config_app.sh --dry-run             # 웹앱의 워크스페이스와 도메인 확인
+./run_live_1_sensors.sh --select           # 원래 센서 선택 메뉴
+source config/live_env.sh                 # 별도 점검 터미널
+ros2 node list --no-daemon
+```
+
+웹앱은 프로젝트의 `.venv/bin/python`을 사용한다. 처음 준비할 때:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install \
+  "fastapi>=0.115" "uvicorn[standard]" "pydantic>=2.9" ruamel.yaml
+cd frontend && npm install && npm run build && cd ..
+```
+
+실행 스크립트는 Python 소스 경로를 추가하므로 웹앱의 별도 `colcon build`는 필요 없다.
+
+웹에서 Ouster 설정을 변경하려면 실행 중인 센서 터미널을 `Ctrl+C`로 종료한 후
+`./run_live_1_sensors.sh --managed`로 시작한다. 기존 터미널 1 스크립트가 사용자
+systemd 서비스에서 실행된다. `vls_ws`를 쓰면 센서와 웹앱 명령 모두에
+`AV_CONFIG_SENSOR_WORKSPACE=vls`를 지정한다.
+
+웹앱과 센서 서비스는 `~/av_config/live/` 아래의 워크스페이스·도메인별 설정과
+Git 이력을 공유한다. 초기값은 센서 워크스페이스의 `hardware.yaml`과 터미널 1의
+기본 인수에서 가져온다. 적용 시 터미널 1 전체가 재시작되어 Ouster, Velodyne,
+INS 데이터가 잠시 끊긴다. Velodyne와 INS의 파라미터는 조회할 수 있다.
+
+`./run_live_1_sensors.sh --stop`으로 서비스를 종료한다. 시작할 때 출력되는 이름으로
+`journalctl --user -fu <유닛 이름>`에서 센서 로그를 볼 수 있다. 일반 터미널에서
+센서를 실행한 경우, 웹앱은 설정을 저장하기 전에 관리 서비스 시작 방법을 표시한다.
+
+---
+
 ## 2. 5분 안에 UI 띄워보기 (docker 불필요)
 
 ROS 2 컨테이너 없이도 UI 전체를 눌러볼 수 있다. `tools/mock_backend.py` 가 **실제

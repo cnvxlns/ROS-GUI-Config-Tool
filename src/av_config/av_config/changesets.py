@@ -79,6 +79,7 @@ class ChangeSetRunner:
         applier: Applier,
         verifier: Verifier,
         gate: SafetyGate,
+        restart_preflight: Callable[[list[str]], Awaitable[None]] | None = None,
     ) -> None:
         self._discovery = discovery
         self._services = services
@@ -89,6 +90,7 @@ class ChangeSetRunner:
         self._applier = applier
         self._verifier = verifier
         self._gate = gate
+        self._restart_preflight = restart_preflight
 
         self._running: str | None = None
         self._lock = asyncio.Lock()
@@ -212,6 +214,15 @@ class ChangeSetRunner:
             result.message = "검증과 계획만 수행했다."
             await emit("dry_run")
             return result
+
+        if plan.restart_units and self._restart_preflight is not None:
+            try:
+                await self._restart_preflight(plan.restart_units)
+            except ApplyError as exc:
+                result.status = ChangeSetStatus.REJECTED
+                result.message = str(exc)
+                await emit("rejected", {"reason": "restart_unavailable"})
+                return result
 
         # --- 4. 저장 -------------------------------------------------
         await emit("save", {"files": plan.files_to_write})

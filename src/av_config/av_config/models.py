@@ -72,7 +72,7 @@ class ServiceRef(BaseModel):
       (트리거형 서비스).
     - response_field: 값을 읽을 응답 필드. 없으면 응답의 첫 필드를 쓴다.
     - json_path: response_field 가 JSON 문자열일 때 값을 꺼낼 경로.
-      "$.config.lidar_mode" 같은 점 표기만 지원한다. 배열 인덱스는 지원하지 않는다.
+      "$.config.lidar_mode" 와 "$.azimuth_window.0" 같은 점 표기를 지원한다.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -185,6 +185,7 @@ class Subsystem(BaseModel):
     launch: str | None = None
     param_files: list[str]
     nodes: list[str]
+    restart_companions: list[str] = Field(default_factory=list)
     topics: list[TopicExpectation] = Field(default_factory=list)
 
 

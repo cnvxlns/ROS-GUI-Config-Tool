@@ -280,7 +280,9 @@ def _fast_settle(monkeypatch):
 
 
 @pytest.fixture
-def rig(tmp_path: Path) -> Rig:
+def rig(tmp_path: Path, monkeypatch) -> Rig:
+    # The synthetic sensor's destination must not depend on the test PC's NIC.
+    monkeypatch.setattr("av_config.hostcheck.host_ipv4_addresses", lambda: {"10.5.5.1"})
     shutil.copytree(
         FIXTURE_CONFIG,
         tmp_path / "cfg",
