@@ -21,3 +21,34 @@ src/av_config/av_config/static/
 
 # 드라이버가 실행 중에 쓰는 센서 메타데이터 (ouster_ros 가 cwd 에 남긴다)
 *-metadata.json
+
+# 실차에서 녹화한 rosbag
+rosbag2_*/
+*.db3
+*.mcap
+
+# 테스트 커버리지·타입 검사 캐시
+.coverage
+htmlcov/
+coverage/
+.mypy_cache/
+
+# 로컬 비밀값·개인 설정
+.env
+.claude/settings.local.json
+
+# 발표자료·진행상황 보고 (로컬에만 둔다)
+docs/presentation-*.md
+docs/progress-report-*.md
+docs/presentation/
+*.pptx
+*.key
+*.mp4
+*.mov
+
+# 편집기·OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
