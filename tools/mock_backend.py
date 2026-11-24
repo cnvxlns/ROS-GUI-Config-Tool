@@ -42,7 +42,7 @@ sys.path.insert(0, str(REPO / "src" / "av_config"))
 
 from av_config.api import build_app  # noqa: E402
 from av_config.changesets import ChangeSetRunner  # noqa: E402
-from av_config.gitparams import GitParams  # noqa: E402
+from av_config.gitparams import GitParams, enclosing_worktree  # noqa: E402
 from av_config.models import (  # noqa: E402
     NodeDTO,
     NodeParamsDTO,
@@ -354,7 +354,8 @@ def main() -> None:
         "--config-root",
         type=Path,
         help="임시 복사본 대신 이 설정 디렉터리를 직접 쓴다. 설정을 고쳐 가며 "
-        "결과를 바로 확인할 때 유용하다. 이 디렉터리는 실제로 수정된다",
+        "결과를 바로 확인할 때 유용하다. 이 디렉터리는 실제로 수정되므로 git 저장소 "
+        "밖이어야 한다 (tools/init_config_root.py 로 만든다)",
     )
     parser.add_argument(
         "--bare",
@@ -383,6 +384,14 @@ def main() -> None:
 
     if args.config_root:
         workspace = args.config_root.expanduser().resolve()
+        worktree = enclosing_worktree(workspace)
+        if worktree is not None:
+            print(
+                f"{workspace} 가 git 저장소 {worktree} 안에 있다. 리포의 설정은 템플릿이라 "
+                "직접 쓰지 않는다. tools/init_config_root.py 로 복사본을 만들어 지정하라.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
         if not (workspace / "services.yaml").is_file():
             print(f"{workspace}/services.yaml 이 없다", file=sys.stderr)
             raise SystemExit(2)

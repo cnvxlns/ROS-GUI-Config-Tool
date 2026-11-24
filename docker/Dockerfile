@@ -76,5 +76,6 @@ RUN git config --system --add safe.directory /opt/av_config/params
 # 개발 이미지라 /root 를 열어 둔다.
 RUN chmod 755 /root
 
-# 설정 루트는 호스트의 config/ 를 마운트해 덮는다. 이미지에 넣지 않는다.
+# 설정 루트는 tools/init_config_root.py 로 만든 호스트의 ~/av_config 를
+# /opt/av_config 로 마운트한다. 리포의 config/ 는 템플릿이다. 이미지에 넣지 않는다.
 WORKDIR /root/ros2_ws

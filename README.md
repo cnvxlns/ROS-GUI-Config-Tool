@@ -242,9 +242,9 @@ curl -s -X POST $B/changesets -H 'Content-Type: application/json' \
 ## 3. 디렉터리 구조
 
 ```
-config/                    # /opt/av_config/ 로 배포될 설정 원본
+config/                    # 설정 템플릿. tools/init_config_root.py 로 저장소 밖에 복사해 쓴다
 ├── services.yaml           #   노드 <-> systemd 유닛 <-> parameter file 매핑
-├── params/                 #   parameter file. 배포 시 여기가 git 저장소다
+├── params/                 #   parameter file 템플릿. 복사본의 params/ 가 git 저장소가 된다
 │   ├── global.yaml         #     시스템 전역 설정 (frame, extrinsic)
 │   └── lidar_top.yaml      #     등록된 서브시스템만 둔다
 ├── schemas/                #   드라이버별 파라미터 스키마 (자동 생성물)
@@ -269,6 +269,7 @@ src/
 └── av_bringup/            # 서브시스템 launch. 파라미터는 파일로만 넘긴다
     └── launch/
 tools/
+├── init_config_root.py     # config/ 템플릿 -> 저장소 밖 설정 루트 (params/ git 초기화)
 ├── mock_backend.py         # docker 없이 UI 를 띄우는 개발 서버
 └── import_driver_params.py # 드라이버 parameter file -> 스키마 초안
 ruff.toml                  # 백엔드 린트 규칙
@@ -409,16 +410,13 @@ cd /root/ros2_ws
 colcon build --symlink-install
 source install/setup.bash
 
-# (3) 설정 루트의 git 저장소 초기화 (이력과 롤백이 여기에 의존한다)
-cd /root/ros2_ws/config/params
-git init -q
-git config user.name avconfig
-git config user.email avconfig@localhost
-git add --all && git commit -q -m "initial: 기준 설정"
-cd /root/ros2_ws
+# (3) 설정 루트 만들기. 리포의 config/ 는 템플릿이라 직접 쓰지 않는다.
+#     복사본의 params/ 가 git 저장소가 되고 이력과 롤백이 여기에 쌓인다.
+#     처음 한 번만 한다. 이미 있는 경로는 거부한다.
+python3 tools/init_config_root.py /root/av_config
 
 # (4) 실행
-AV_CONFIG_ROOT=/root/ros2_ws/config \
+AV_CONFIG_ROOT=/root/av_config \
 AV_CONFIG_HOST=127.0.0.1 \
 AV_CONFIG_PORT=8080 \
   /opt/av_config/.venv/bin/python -m av_config.main
@@ -584,8 +582,12 @@ venv 의 파이썬이 아니라 시스템 파이썬으로 실행한 것이다. `
 프론트엔드를 빌드하지 않았다. `cd frontend && npm run build`.
 
 **이력 화면이 비어 있고 적용이 실패한다**
-`config/params/` 가 git 저장소가 아니다. 5.2절 (3)단계를 실행한다. 저장소가 없으면
-Config App 이 시작할 때 오류 로그를 남긴다.
+설정 루트의 `params/` 가 git 저장소가 아니다. 5.2절 (3)단계로 설정 루트를 만든다.
+저장소가 없으면 Config App 이 시작할 때 오류 로그를 남긴다.
+
+**`설정 루트 ... 가 git 저장소 ... 안에 있다` 로 시작하지 않는다**
+`AV_CONFIG_ROOT` 가 리포의 `config/` 를 가리킨다. 그대로 쓰면 추적 중인 파일이 바뀌고
+`git pull` 이 충돌한다. 5.2절 (3)단계로 저장소 밖에 설정 루트를 만든다.
 
 **노드 목록이 비어 있다**
 Config App 과 드라이버 노드의 `ROS_DOMAIN_ID` 와 RMW 설정이 같아야 서로 보인다.
@@ -605,7 +607,7 @@ Config App 과 드라이버 노드의 `ROS_DOMAIN_ID` 와 RMW 설정이 같아�
 colcon build --packages-select av_config
 
 # 2. 기동과 응답
-AV_CONFIG_ROOT=/root/ros2_ws/config /opt/av_config/.venv/bin/python -m av_config.main &
+AV_CONFIG_ROOT=/root/av_config /opt/av_config/.venv/bin/python -m av_config.main &
 curl -s http://127.0.0.1:8080/api/v1/nodes
 
 # 3. 임의 노드를 상대로 수집이 되는지

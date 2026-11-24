@@ -23,6 +23,20 @@ class GitError(Exception):
     """git 명령이 실패했다."""
 
 
+def enclosing_worktree(path: Path) -> Path | None:
+    """path 자신이나 그 상위 디렉터리에 있는 git 작업 트리의 루트. 없으면 None.
+
+    설정 루트가 다른 저장소(예: 소스 리포의 config/) 안에 있으면 Config App 이 그
+    저장소가 추적하는 파일을 고쳐 쓴다. params/ 가 별도 저장소가 아니면 이력까지
+    그 저장소에 쌓인다. 설정 루트는 이 함수가 None 을 돌려주는 곳이어야 한다.
+    """
+    path = path.expanduser().resolve()
+    for candidate in (path, *path.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
 @dataclass(frozen=True)
 class Commit:
     sha: str
@@ -55,14 +69,21 @@ class GitParams:
         return proc.stdout
 
     def is_repo(self) -> bool:
+        """params/ 자체가 저장소의 루트인지.
+
+        상위 디렉터리의 저장소에 속하기만 해도 rev-parse 는 성공한다. 그 상태로
+        commit 하면 이력이 상위 저장소에 쌓이므로 루트가 일치해야 저장소로 본다.
+        """
         proc = subprocess.run(
-            ["git", "-C", str(self.repo), "rev-parse", "--git-dir"],
+            ["git", "-C", str(self.repo), "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
             timeout=_TIMEOUT,
             check=False,
         )
-        return proc.returncode == 0
+        if proc.returncode != 0:
+            return False
+        return Path(proc.stdout.strip()).resolve() == self.repo.resolve()
 
     def head(self) -> str | None:
         """현재 HEAD. commit 이 하나도 없으면 None."""

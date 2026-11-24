@@ -30,7 +30,8 @@ Environment=ROS_DOMAIN_ID=0
 Environment=AV_CONFIG_ROOT=/opt/av_config
 
 # TBD: 워크스페이스 설치 경로. 배포 규약이 아직 정해지지 않았다(명세에 없음).
-# config/ 는 /opt/av_config 로 간다는 것만 정해져 있다(README §3).
+# config/ 템플릿을 tools/init_config_root.py 로 /opt/av_config 에 복사한다는 것만
+# 정해져 있다(README §3).
 ExecStart=/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/av_ws/install/setup.bash && exec ros2 launch av_bringup lidar_top.launch.py config_root:=/opt/av_config'
 
 # 센서가 아직 안 올라왔으면 os_driver 가 finalized 로 가고 launch 가 스스로

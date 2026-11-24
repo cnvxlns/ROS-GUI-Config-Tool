@@ -47,8 +47,8 @@ OS_DRIVER_NAME = "os_driver"
 
 def generate_launch_description():
     # 설정 루트. Config App 의 AV_CONFIG_ROOT 와 같은 곳을 가리켜야 한다.
-    # 배포 기본값은 /opt/av_config 이고, 컨테이너 개발 중에는
-    # config_root:=/root/ros2_ws/config 로 덮는다.
+    # 배포 기본값은 /opt/av_config 이다. 리포의 config/ 는 템플릿이므로 개발 중에도
+    # tools/init_config_root.py 로 만든 복사본을 config_root:= 로 넘긴다.
     config_root_arg = DeclareLaunchArgument(
         "config_root",
         default_value="/opt/av_config",

@@ -56,32 +56,20 @@ root 로 빌드하고 마지막에 소유권을 되돌린다. `-u $(id -u):$(id 
 이력과 롤백이 여기에 의존한다. 아직 커밋이 없으면 Config App 이 경고를 띄운다.
 
 ```bash
-cp -a ~/ros2_ws/config ~/av_config          # 리포의 원본을 런타임 루트로 복사
-cd ~/av_config/params
-git init -q && git config user.name avconfig && git config user.email avconfig@localhost
-git add --all && git commit -q -m "initial: 기준 설정"
+python3 ~/ros2_ws/tools/init_config_root.py ~/av_config   # 템플릿 복사 + params/ git 초기화
 ```
 
-**런타임 루트는 리포 밖(`~/av_config`)이다.** 리포의 `config/` 는 배포될 원본이고,
-실행 중인 시스템은 사본에서 이력을 쌓는다 — 배포 환경의 `/opt/av_config` 와 같은
-위치다. 둘을 같은 디렉터리로 두면 `config/params` 가 리포 안의 중첩 git 저장소가
-되고, 상위 리포가 그것을 깨진 하위 모듈 포인터로 취급해 **parameter file 이
-커밋에서 빠진다.**
+**런타임 루트는 리포 밖(`~/av_config`)이다.** 리포의 `config/` 는 템플릿이고,
+실행 중인 시스템은 사본의 `params/` 에 이력을 쌓는다 — 배포 환경의 `/opt/av_config` 와
+같은 구조다. Config App 과 `init_config_root.py` 는 git 저장소 안의 경로를 설정
+루트로 받지 않는다. 리포의 `config/` 를 그대로 쓰면 추적 중인 파일이 바뀌고
+`config/params` 가 중첩 저장소가 되기 때문이다.
 
-UI 에서 바꾼 값을 리포의 원본에도 반영하려면 파일을 복사해 커밋한다:
+UI 에서 바꾼 값을 템플릿에도 반영하려면 파일을 복사해 리포에 커밋한다:
 
 ```bash
 cp ~/av_config/params/*.yaml ~/ros2_ws/config/params/
 ```
-
-`~/ros2_ws` 자체가 git 저장소지만 `config/params` 는 **별도 저장소**여야 한다.
-배포 시 이 디렉터리만 `/opt/av_config/params` 로 가고, GitParams 가 그 경로를
-저장소 루트로 본다.
-
-개발 리포에서 이걸 하면 `config/params/.git` 이 생긴다. 테스트와
-`tools/mock_backend.py` 는 `config/` 를 임시 디렉터리로 복사해 쓰므로, 복사할 때
-`.git` 을 제외한다 — 안 하면 복사본에 이미 초기 commit 이 있어서 픽스처의
-initial commit 이 "변경 없음"으로 실패한다.
 
 ## 4. 드라이버 유닛 설치
 

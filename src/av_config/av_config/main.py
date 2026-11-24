@@ -27,7 +27,7 @@ from .api import build_app
 from .applier import Applier
 from .changesets import ChangeSetRunner
 from .discovery import Discovery
-from .gitparams import GitParams
+from .gitparams import GitParams, enclosing_worktree
 from .models import SafetyRules
 from .schema import SchemaRegistry
 from .services_map import ServicesMap
@@ -75,6 +75,14 @@ def main(argv: list[str] | None = None) -> None:
     root = _resolve_root()
     _log.info("설정 루트: %s", root)
 
+    worktree = enclosing_worktree(root)
+    if worktree is not None:
+        raise SystemExit(
+            f"설정 루트 {root} 가 git 저장소 {worktree} 안에 있다. 리포의 config/ 는 "
+            "템플릿이므로 직접 쓰지 않는다. tools/init_config_root.py 로 저장소 밖에 "
+            "설정 루트를 만들고 AV_CONFIG_ROOT 로 지정하라."
+        )
+
     services_path = root / "services.yaml"
     if not services_path.is_file():
         raise SystemExit(
@@ -107,7 +115,7 @@ def main(argv: list[str] | None = None) -> None:
     if not git.is_repo():
         _log.error(
             "%s 가 git 저장소가 아니다. 적용 이력과 롤백이 동작하지 않는다. "
-            "M0 에서 git init 이 필요하다 (명세 §13.1).",
+            "tools/init_config_root.py 로 만든 설정 루트를 쓴다 (명세 §13.1).",
             git.repo,
         )
     elif not git.is_clean():
